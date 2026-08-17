@@ -1,0 +1,13 @@
+# Git Updater installs from the archive GitHub generates for a tag, and that
+# archive respects export-ignore. Anything listed here stays out of what lands
+# in wp-content/plugins on a client site.
+#
+# This is also the guard against the failure that broke the first deploy: a
+# .git directory inside the plugin folder cannot be removed by WordPress
+# (git object files are mode 444), so the updater aborts halfway and leaves a
+# stump. Archives never contain .git, and this keeps the rest of the dev
+# scaffolding out too.
+
+/.gitattributes export-ignore
+/.gitignore     export-ignore
+/bin            export-ignore
