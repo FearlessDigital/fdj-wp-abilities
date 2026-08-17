@@ -2,7 +2,7 @@
 /**
  * Plugin Name:       FDJ WordPress Abilities for MCP
  * Description:       Self-contained MCP toolkit for WordPress. Registers page/post abilities, repairs Application Password auth on nginx/PHP-FPM hosts, and adds one-click connection setup, a health panel, and an audit log. Upload, activate, go.
- * Version:           1.0.1
+ * Version:           1.0.2
  * Requires at least: 6.9
  * Requires PHP:      7.4
  * Author:            Fearless Digital Journey
@@ -28,7 +28,7 @@
 
 defined( 'ABSPATH' ) || exit;
 
-define( 'FDJ_MCP_VERSION', '1.0.1' );
+define( 'FDJ_MCP_VERSION', '1.0.2' );
 define( 'FDJ_MCP_FILE', __FILE__ );
 define( 'FDJ_MCP_DIR', plugin_dir_path( __FILE__ ) );
 define( 'FDJ_MCP_OPTION', 'fdj_mcp_settings' );
@@ -41,10 +41,14 @@ define( 'FDJ_MCP_SERVER_PATH', 'mcp/mcp-adapter-default-server' );
  * ---------------------------------------------------------------------------
  * This runs at FILE SCOPE on purpose, not on a hook. WordPress core's
  * application-password check reads only $_SERVER['PHP_AUTH_USER'] and
- * ['PHP_AUTH_PW']. Apache with mod_php populates those automatically; nginx
- * with PHP-FPM (Pressable, WP Engine, most managed hosts) frequently does not,
- * even though it passes the Authorization header through intact. The result is
- * a bare "rest_not_logged_in" that looks exactly like a wrong username.
+ * ['PHP_AUTH_PW']. Apache with mod_php populates those automatically; some
+ * nginx and PHP-FPM setups do not, even while passing the Authorization header
+ * through intact. Where that happens the result is a bare "rest_not_logged_in".
+ *
+ * Do not assume a host needs this. Many populate PHP_AUTH_USER natively, in
+ * which case the block below no-ops. The health panel reports which case a
+ * given site is in. Note also that a valid username with a WRONG password
+ * returns "rest_not_logged_in" too, so that symptom alone proves nothing.
  *
  * Plugin files load during wp-settings.php, well before WordPress resolves the
  * current user for a REST request, so doing this here is early enough.

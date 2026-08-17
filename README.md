@@ -64,7 +64,13 @@ Recommended: connect as a dedicated user with the lowest role that does the job,
 
 Both cost real hours before being understood, and both are silent.
 
-**1. Application Passwords fail on nginx + PHP-FPM.** WordPress core's app-password check reads only `$_SERVER['PHP_AUTH_USER']`. Apache with mod_php fills that in; nginx with PHP-FPM (Pressable, WP Engine, most managed hosts) usually does not, even though it passes the `Authorization` header through untouched. Symptom is a bare `rest_not_logged_in` that looks exactly like a wrong username. The shim in the main plugin file decodes the header into the variables core reads. Note that `.htaccess` fixes found online are useless on nginx hosts, and Pressable will not edit nginx config even by support request.
+**1. Application Passwords can fail silently on some hosts.** WordPress core's app-password check reads only `$_SERVER['PHP_AUTH_USER']` and `PHP_AUTH_PW`. Apache with mod_php fills those in automatically; some nginx and PHP-FPM setups do not, even while passing the `Authorization` header through untouched. Where that happens, every Application Password login fails with a bare `rest_not_logged_in`. The shim in the main plugin file decodes the header into the variables core reads, and no-ops where the host already handles it.
+
+How common this is varies by host, so do not assume. The health panel's "Basic auth reaching PHP" row tells you which case a given site is in, and distinguishes the host doing it natively from another mu-plugin doing it.
+
+A warning about diagnosing this by hand: **a valid username with a wrong password also returns `rest_not_logged_in`**, not `incorrect_password`. That test therefore cannot distinguish broken auth plumbing from a simple typo in the credential, and mistaking one for the other will send you a long way down the wrong path. Use the health panel instead.
+
+If a host genuinely strips the `Authorization` header outright, `.htaccess` fixes found online do nothing on nginx, and some managed hosts (Pressable among them) will not edit nginx config even by support request. In that case send the credential as `X-Authorization` instead, which this plugin also accepts.
 
 **2. `meta.public` does not exist in WP 6.9/7.0.** Abilities register successfully but stay invisible to REST and MCP unless meta sets `show_in_rest => true` and `mcp => ['public' => true]` explicitly. The `meta.public` shorthand that seeds both landed in core after 7.0, so trunk source and much of the documentation are misleading here. Symptom: the ability appears in `wp_get_abilities()` but is absent from `/wp-json/wp-abilities/v1/abilities`. This plugin always sets the specific keys, which is correct on every version.
 

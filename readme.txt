@@ -4,7 +4,7 @@ Tags: mcp, ai, claude, abilities, rest-api
 Requires at least: 6.9
 Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: 1.0.1
+Stable tag: 1.0.2
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -47,6 +47,10 @@ On WordPress 6.9 and 7.0 an ability must set `meta.show_in_rest` and `meta.mcp.p
 Check the Basic auth row in the health panel. Some hosts pass the Authorization header but never populate PHP_AUTH_USER, which is the only thing core reads. The bundled shim handles that case.
 
 == Changelog ==
+
+= 1.0.2 =
+* Docs: corrected an overstated claim that Application Password auth "usually" fails on nginx/PHP-FPM hosts. Many populate PHP_AUTH_USER natively; the health panel reports which case a site is in.
+* Docs: added a warning that a valid username with a wrong password also returns rest_not_logged_in, so that symptom cannot be used to diagnose auth plumbing.
 
 = 1.0.1 =
 * Health panel no longer reports "working natively" when another mu-plugin is supplying PHP_AUTH_USER. It now detects duplicates and names them.
