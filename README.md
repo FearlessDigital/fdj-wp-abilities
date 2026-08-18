@@ -8,8 +8,8 @@ Built by Fearless Digital Journey for AI-assisted site building and editing, wit
 
 | Piece | Why |
 |---|---|
-| Four page/post abilities | The actual capability surface |
-| Basic auth compatibility shim | Application Passwords silently fail on most managed nginx hosts without it |
+| Eight page/post abilities | Read, targeted edit, and rollback |
+| Basic auth compatibility shim | Rescues hosts that do not populate PHP_AUTH_USER, no-ops elsewhere |
 | One-click connection setup | Generates an Application Password and hands back a paste-ready connect command |
 | Health panel | Every failure mode we hit in the field, as a pass/fail row |
 | Audit log | Records what ran, as whom, and when |
@@ -36,9 +36,13 @@ No SFTP, no file editing, no config files.
 | Ability ID | What it does | Type | Default |
 |---|---|---|---|
 | `fdj/list-posts` | Search/list posts or pages by type, status, search term | Read | On |
-| `fdj/get-post` | Read a single post/page by ID, raw `post_content` included | Read | On |
+| `fdj/search-content` | Find which posts contain a literal string, site-wide, with occurrence counts | Read | On |
+| `fdj/get-post` | Read a post by ID. Pass `search` to get only matching regions instead of the whole body | Read | On |
+| `fdj/list-revisions` | List stored revisions, the undo history for any edit | Read | On |
+| `fdj/replace-in-post` | Targeted find and replace inside one post, with `dry_run` and `expect_count` | Write | Off |
+| `fdj/update-post-content` | Overwrite a post's content, and optionally title/status | Write | Off |
 | `fdj/create-post` | Create a new post/page | Write | Off |
-| `fdj/update-post-content` | Overwrite a post/page's content, and optionally title/status | Write | Off |
+| `fdj/restore-revision` | Roll a post back to a stored revision | Write | Off |
 
 Every ability checks WordPress capabilities (`edit_post`, `edit_posts`, `create_posts`) through its `permission_callback`, so access is bounded by whichever user authenticates the connection. There is no bypass of core capability checks. Writes ship disabled so a freshly activated site can read and nothing more until someone decides otherwise.
 
@@ -53,6 +57,23 @@ mcp-adapter-execute-ability
 ```
 
 Abilities are invoked through the third as `{"ability_name": "fdj/list-posts", "parameters": {...}}`. Claude discovers first, then executes.
+
+## The editing model
+
+Prefer targeted edits over whole-page rewrites. On a page-builder page the full body can be 100KB of shortcodes, so reading it and writing it back costs that twice and risks damaging parts you never intended to touch.
+
+```
+search-content   find where the string lives, site-wide
+get-post         read only the region that matched, via the search parameter
+replace-in-post  dry_run to preview, then patch with expect_count set
+list-revisions   undo if it went wrong
+```
+
+Three guards worth knowing:
+
+- **`expect_count`** on a replace. State how many matches you expect. If the real count differs, nothing is written and the actual number is reported. This is what stops "update the phone number" from quietly rewriting forty places.
+- **`dry_run`** on a replace. Returns the match count and surrounding context without saving.
+- **`expected_modified`** on any write. Pass the `modified` value you last read, and the write is refused if a human edited the post in wp-admin in the meantime rather than silently destroying their work.
 
 ## Security model
 

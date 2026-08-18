@@ -4,7 +4,7 @@ Tags: mcp, ai, claude, abilities, rest-api
 Requires at least: 6.9
 Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: 1.0.2
+Stable tag: 1.1.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -14,7 +14,7 @@ Connect a WordPress site to Claude over the Model Context Protocol. Upload, acti
 
 Registers WordPress Abilities so the MCP Adapter's default server can expose page and post operations to an AI client, and bundles everything else a site needs to actually connect:
 
-* Four page/post abilities (list, read, create, update), each bounded by normal WordPress capability checks
+* Eight page/post abilities (list, search, read, revisions, replace, update, create, restore), each bounded by normal WordPress capability checks
 * A Basic auth compatibility shim for hosts that do not populate PHP_AUTH_USER
 * One-click setup that generates an Application Password and returns a paste-ready connection command
 * A health panel covering every known failure mode in the connection chain
@@ -47,6 +47,15 @@ On WordPress 6.9 and 7.0 an ability must set `meta.show_in_rest` and `meta.mcp.p
 Check the Basic auth row in the health panel. Some hosts pass the Authorization header but never populate PHP_AUTH_USER, which is the only thing core reads. The bundled shim handles that case.
 
 == Changelog ==
+
+= 1.1.0 =
+* New: fdj/replace-in-post. Targeted find and replace inside one post, with dry_run to preview and expect_count as a safety guard. Far cheaper and far safer than rewriting whole content.
+* New: fdj/search-content. Literal string search across the whole site with per-post occurrence counts.
+* New: fdj/list-revisions and fdj/restore-revision. Undo for any edit made through these abilities.
+* fdj/get-post gains a "search" parameter that returns only matching regions with context, instead of the entire body.
+* All writes accept expected_modified, a concurrency guard that refuses the write if the post changed since it was read.
+* fdj/create-post now returns edit_url. Write abilities now return modified.
+* Note for existing installs: new abilities are off until enabled under Tools > Claude MCP, since your saved toggles are preserved on update.
 
 = 1.0.2 =
 * Docs: corrected an overstated claim that Application Password auth "usually" fails on nginx/PHP-FPM hosts. Many populate PHP_AUTH_USER natively; the health panel reports which case a site is in.
