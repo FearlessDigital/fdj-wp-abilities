@@ -13,6 +13,7 @@ Built by Fearless Digital Journey for AI-assisted site building and editing, wit
 | One-click connection setup | Generates an Application Password and hands back a paste-ready connect command |
 | Health panel | Every failure mode we hit in the field, as a pass/fail row |
 | Audit log | Records what ran, as whom, and when |
+| Claude Desktop extension | Per-site `.mcpb`, installs on double-click, no config editing |
 
 ## Requirements
 
@@ -74,6 +75,25 @@ Three guards worth knowing:
 - **`expect_count`** on a replace. State how many matches you expect. If the real count differs, nothing is written and the actual number is reported. This is what stops "update the phone number" from quietly rewriting forty places.
 - **`dry_run`** on a replace. Returns the match count and surrounding context without saving.
 - **`expected_modified`** on any write. Pass the `modified` value you last read, and the write is refused if a human edited the post in wp-admin in the meantime rather than silently destroying their work.
+
+## Client setup without a terminal
+
+Tools > Claude MCP has a **Download connector** button that builds a Claude Desktop extension (`.mcpb`) for this specific site. The endpoint URL and username are baked in as defaults, so whoever installs it fills exactly one field.
+
+Their whole flow:
+
+1. Open the site's WP admin, Tools > Claude MCP
+2. Generate Application Password, copy it
+3. Download connector
+4. Double-click the file, paste the password, Install
+
+No terminal, no JSON, nothing to install for the bridge, since Claude Desktop ships its own Node runtime.
+
+The bundle contains a manifest and a zero-dependency Node bridge of about 5KB, so the whole extension is roughly 3KB. It was built that way rather than vendoring `@automattic/mcp-wordpress-remote` and its dependency tree: all that is needed is stdio to HTTP with Basic auth, and this way there is nothing to keep patched and the bundle installs offline.
+
+**The password is not baked into the bundle.** It could be, and it would remove a step, but the file would then be a live credential travelling by email. Claude Desktop prompts for it at install and stores it in the OS keychain.
+
+Requires the PHP `ZipArchive` extension. The settings screen says so plainly if a host lacks it, and everything else keeps working.
 
 ## Security model
 

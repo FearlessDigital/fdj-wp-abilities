@@ -98,6 +98,7 @@ class FDJ_MCP_Settings {
 			<?php
 			self::render_health( $checks );
 			self::render_connection( $new_password, $new_user );
+			FDJ_MCP_Bundle::render_section();
 			self::render_abilities( $settings );
 			self::render_audit( $settings );
 			?>

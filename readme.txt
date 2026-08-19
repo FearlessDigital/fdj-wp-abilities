@@ -4,7 +4,7 @@ Tags: mcp, ai, claude, abilities, rest-api
 Requires at least: 6.9
 Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: 1.1.0
+Stable tag: 1.2.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -19,6 +19,7 @@ Registers WordPress Abilities so the MCP Adapter's default server can expose pag
 * One-click setup that generates an Application Password and returns a paste-ready connection command
 * A health panel covering every known failure mode in the connection chain
 * An audit log of every ability invocation
+* A downloadable Claude Desktop extension (.mcpb) for one-click setup
 
 The plugin never stores an Application Password. It generates one, shows it once, and forgets it.
 
@@ -47,6 +48,11 @@ On WordPress 6.9 and 7.0 an ability must set `meta.show_in_rest` and `meta.mcp.p
 Check the Basic auth row in the health panel. Some hosts pass the Authorization header but never populate PHP_AUTH_USER, which is the only thing core reads. The bundled shim handles that case.
 
 == Changelog ==
+
+= 1.2.0 =
+* New: Download connector (.mcpb). Generates a Claude Desktop extension for this site, with the endpoint URL and username already filled in, so installing is double-click plus paste one password. No JSON config editing.
+* The bundle ships a zero-dependency Node bridge (about 5KB) rather than vendoring an npm package, so the extension is around 3KB total, installs offline, and has no dependency tree to keep patched.
+* The Application Password is deliberately not baked into the bundle. Claude Desktop prompts for it at install and stores it in the OS keychain.
 
 = 1.1.0 =
 * New: fdj/replace-in-post. Targeted find and replace inside one post, with dry_run to preview and expect_count as a safety guard. Far cheaper and far safer than rewriting whole content.
