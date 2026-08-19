@@ -22,6 +22,43 @@ class FDJ_MCP_Health {
 	 */
 	public static function init() {
 		add_action( 'rest_api_init', array( __CLASS__, 'register_probe_route' ) );
+		add_filter( 'rest_authentication_errors', array( __CLASS__, 'allow_probe_request' ), PHP_INT_MAX );
+	}
+
+	/**
+	 * Let the probe route answer even when authentication failed.
+	 *
+	 * rest_authentication_errors is a global gate. Once anything sets an error,
+	 * EVERY route returns 401 regardless of its own permission_callback. The probe
+	 * deliberately sends a throwaway credential, so on sites where core reports
+	 * "invalid_username" for it, the probe could never read its own result and
+	 * reported a failure while actually proving success.
+	 *
+	 * This clears the error for the probe route only, gated on the same
+	 * single-use token, and touches nothing else.
+	 *
+	 * @param WP_Error|null|true $errors Current authentication result.
+	 * @return WP_Error|null|true
+	 */
+	public static function allow_probe_request( $errors ) {
+		if ( ! is_wp_error( $errors ) ) {
+			return $errors;
+		}
+
+		$uri = isset( $_SERVER['REQUEST_URI'] ) ? (string) $_SERVER['REQUEST_URI'] : '';
+
+		if ( false === strpos( $uri, 'fdj-mcp/v1/auth-probe' ) ) {
+			return $errors;
+		}
+
+		$stored = get_transient( self::PROBE_TRANSIENT );
+		$token  = isset( $_GET['token'] ) ? (string) wp_unslash( $_GET['token'] ) : '';
+
+		if ( $stored && $token && hash_equals( (string) $stored, $token ) ) {
+			return null;
+		}
+
+		return $errors;
 	}
 
 	/**
@@ -139,12 +176,29 @@ class FDJ_MCP_Health {
 		}
 
 		$body = json_decode( wp_remote_retrieve_body( $response ), true );
+		$code = wp_remote_retrieve_response_code( $response );
+
+		/*
+		 * A rejection naming the username is positive evidence, not a failure.
+		 * WordPress can only say "unknown username" or "invalid application
+		 * password" by having read PHP_AUTH_USER, which is the exact thing being
+		 * tested. Some sites surface this before the probe route can answer.
+		 */
+		if ( is_array( $body ) && isset( $body['code'] )
+			&& in_array( $body['code'], array( 'invalid_username', 'incorrect_password', 'application_passwords_disabled_for_user' ), true ) ) {
+
+			return array(
+				'ok'      => true,
+				'message' => 'Working',
+				'detail'  => 'WordPress read the credentials and rejected the throwaway ones this test sends, which is the correct response and confirms Basic auth reaches PHP.',
+			);
+		}
 
 		if ( ! is_array( $body ) || ! isset( $body['php_auth_user'] ) ) {
 			return array(
 				'ok'      => false,
-				'message' => 'Loopback test returned an unexpected response',
-				'detail'  => 'HTTP ' . wp_remote_retrieve_response_code( $response ) . '. A security plugin or CDN may be intercepting REST requests.',
+				'message' => 'Inconclusive',
+				'detail'  => 'The loopback test got HTTP ' . $code . ' with no readable result. This does not mean your connection is broken. Confirm directly by generating an Application Password and requesting /wp-json/wp/v2/users/me with it.',
 			);
 		}
 

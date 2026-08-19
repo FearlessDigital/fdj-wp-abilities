@@ -4,7 +4,7 @@ Tags: mcp, ai, claude, abilities, rest-api
 Requires at least: 6.9
 Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: 1.2.0
+Stable tag: 1.2.1
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -48,6 +48,12 @@ On WordPress 6.9 and 7.0 an ability must set `meta.show_in_rest` and `meta.mcp.p
 Check the Basic auth row in the health panel. Some hosts pass the Authorization header but never populate PHP_AUTH_USER, which is the only thing core reads. The bundled shim handles that case.
 
 == Changelog ==
+
+= 1.2.1 =
+* Fixed a false negative in the health panel's Basic auth check. rest_authentication_errors is a global gate: once any authentication error is set, every REST route returns 401 regardless of its own permission callback. Because the probe deliberately sends a throwaway credential, sites where core answered "invalid_username" made the probe unable to read its own result, so it reported a failure while actually proving success.
+* The probe route now clears that error for itself only, gated on the same single-use token.
+* A core rejection naming the username is now correctly read as positive evidence, since WordPress could only produce it by reading PHP_AUTH_USER.
+* An unreadable result now reports "Inconclusive" with a suggested manual check, rather than asserting something is broken.
 
 = 1.2.0 =
 * New: Download connector (.mcpb). Generates a Claude Desktop extension for this site, with the endpoint URL and username already filled in, so installing is double-click plus paste one password. No JSON config editing.

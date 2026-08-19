@@ -2,7 +2,7 @@
 /**
  * Plugin Name:       FDJ WordPress Abilities for MCP
  * Description:       Self-contained MCP toolkit for WordPress. Registers page/post abilities, repairs Application Password auth on nginx/PHP-FPM hosts, and adds one-click connection setup, a health panel, and an audit log. Upload, activate, go.
- * Version:           1.2.0
+ * Version:           1.2.1
  * Requires at least: 6.9
  * Requires PHP:      7.4
  * Author:            Fearless Digital Journey
@@ -28,7 +28,7 @@
 
 defined( 'ABSPATH' ) || exit;
 
-define( 'FDJ_MCP_VERSION', '1.2.0' );
+define( 'FDJ_MCP_VERSION', '1.2.1' );
 define( 'FDJ_MCP_FILE', __FILE__ );
 define( 'FDJ_MCP_DIR', plugin_dir_path( __FILE__ ) );
 define( 'FDJ_MCP_OPTION', 'fdj_mcp_settings' );
