@@ -51,6 +51,16 @@ const AUTH = 'Basic ' + Buffer.from(USERNAME + ':' + PASSWORD).toString('base64'
 // The adapter hands back a session id on initialize and expects it thereafter.
 let sessionId = null;
 
+/*
+ * The client's own initialize message, kept so the session can be rebuilt
+ * without the client's involvement. See recoverAndRetry() for why that is
+ * necessary rather than merely tidy.
+ */
+let lastInitialize = null;
+
+// McpErrorFactory::SESSION_NOT_FOUND in the WordPress MCP Adapter.
+const SESSION_NOT_FOUND = -32005;
+
 /**
  * POST one JSON-RPC message and resolve with the parsed reply, or null when the
  * server returns no body (notifications answer with 202 and nothing else).
@@ -161,6 +171,61 @@ function send(payload) {
 	}
 }
 
+/**
+ * Whether a reply is the adapter rejecting our session id.
+ *
+ * Note this arrives as HTTP 200 with a JSON-RPC error in the body, not as a 4xx,
+ * so it has to be matched on the error code.
+ */
+function isSessionGone(reply) {
+	return !!(reply && reply.error && reply.error.code === SESSION_NOT_FOUND);
+}
+
+/**
+ * Send a message, and if the adapter says our session is gone, transparently
+ * rebuild the session and send it once more.
+ *
+ * Two things make this necessary rather than defensive padding:
+ *
+ * 1. Sessions expire. The adapter stores them in user meta with a 24 hour
+ *    inactivity timeout, so any client left running overnight wakes up with a
+ *    session id the server has already dropped.
+ *
+ * 2. Concurrent first connections race. SessionManager::mutate_sessions() uses
+ *    update_user_meta() with a $prev_value guard, but WordPress ignores an empty
+ *    $prev_value, so when several clients initialize at once against a user with
+ *    no stored sessions they overwrite each other. The adapter documents this in
+ *    its own source. Claude Desktop, Cowork and Code each run a separate copy of
+ *    this bridge, which is exactly the condition that triggers it: whichever copy
+ *    loses the race holds a session id that was never persisted.
+ *
+ * Recovery is one attempt. If re-initializing does not help, the original error
+ * is returned, since it describes the real problem better than a retry failure.
+ */
+async function postWithRecovery(message) {
+	const reply = await post(message);
+
+	// An initialize IS the recovery, so it must never recurse into one.
+	if (!isSessionGone(reply) || message.method === 'initialize' || !lastInitialize) {
+		return reply;
+	}
+
+	log('Session rejected by WordPress. Re-initializing and retrying once.');
+	sessionId = null;
+
+	const reinitialized = await post(lastInitialize);
+
+	if (!reinitialized || reinitialized.error || !sessionId) {
+		return reply;
+	}
+
+	// Deliberately not sent to stdout: the client already has its initialize
+	// response and a second one carrying the same id would corrupt the stream.
+	await post({ jsonrpc: '2.0', method: 'notifications/initialized' });
+
+	return post(message);
+}
+
 /*
  * Requests are processed strictly in order. It costs a little concurrency but
  * guarantees initialize completes, and its session id is captured, before
@@ -169,8 +234,12 @@ function send(payload) {
 let queue = Promise.resolve();
 
 function enqueue(message) {
+	if (message && message.method === 'initialize') {
+		lastInitialize = message;
+	}
+
 	queue = queue
-		.then(() => post(message))
+		.then(() => postWithRecovery(message))
 		.then(send)
 		.catch((err) => {
 			send(errorFor(message, -32603, 'Bridge error: ' + (err && err.message ? err.message : String(err))));

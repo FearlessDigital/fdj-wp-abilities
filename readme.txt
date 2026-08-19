@@ -4,7 +4,7 @@ Tags: mcp, ai, claude, abilities, rest-api
 Requires at least: 6.9
 Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: 1.2.1
+Stable tag: 1.2.2
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -48,6 +48,11 @@ On WordPress 6.9 and 7.0 an ability must set `meta.show_in_rest` and `meta.mcp.p
 Check the Basic auth row in the health panel. Some hosts pass the Authorization header but never populate PHP_AUTH_USER, which is the only thing core reads. The bundled shim handles that case.
 
 == Changelog ==
+
+= 1.2.2 =
+* Fixed: the bundled connector now rebuilds its session automatically when WordPress reports "Session not found: Invalid or expired session", instead of staying broken until the client is restarted.
+* This has two causes, both outside the connector's control. Sessions expire after 24 hours of inactivity, so any client left running overnight wakes up holding a session the server has dropped. And Claude Desktop, Cowork and Code each run their own copy of the connector, which can initialize simultaneously; the MCP Adapter's session store uses update_user_meta with a previous-value guard, and WordPress ignores that guard when the stored value is empty, so concurrent first connections overwrite each other and the losing copy holds a session that was never saved.
+* Existing installs must download and reinstall the connector to pick this up. Updating the plugin alone does not update an already-installed .mcpb.
 
 = 1.2.1 =
 * Fixed a false negative in the health panel's Basic auth check. rest_authentication_errors is a global gate: once any authentication error is set, every REST route returns 401 regardless of its own permission callback. Because the probe deliberately sends a throwaway credential, sites where core answered "invalid_username" made the probe unable to read its own result, so it reported a failure while actually proving success.
