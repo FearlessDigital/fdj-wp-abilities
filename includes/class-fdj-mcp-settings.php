@@ -231,7 +231,18 @@ class FDJ_MCP_Settings {
 		$endpoint = fdj_mcp_server_url();
 		$host     = wp_parse_url( home_url(), PHP_URL_HOST );
 		$name     = 'wp-' . sanitize_title( $host );
-		$users    = get_users( array( 'capability' => 'edit_posts', 'number' => 100 ) );
+
+		// 'edit_posts' pulled in every course/membership subscriber on sites
+		// where a plugin grants that capability broadly, burying the one or
+		// two admin accounts this dropdown actually exists for. Always include
+		// the current user too, even if their access comes from a non-standard
+		// role, so the preselection below never silently falls back to row one.
+		$users        = get_users( array( 'role' => 'administrator', 'number' => 100 ) );
+		$current_user = wp_get_current_user();
+
+		if ( $current_user->exists() && ! in_array( $current_user->ID, wp_list_pluck( $users, 'ID' ), true ) ) {
+			array_unshift( $users, $current_user );
+		}
 		?>
 		<h2><?php esc_html_e( 'Connect', 'fdj-wp-abilities' ); ?></h2>
 

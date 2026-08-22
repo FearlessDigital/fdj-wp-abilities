@@ -4,7 +4,7 @@ Tags: mcp, ai, claude, abilities, rest-api
 Requires at least: 6.9
 Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: 1.2.2
+Stable tag: 1.2.2.3
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -48,6 +48,11 @@ On WordPress 6.9 and 7.0 an ability must set `meta.show_in_rest` and `meta.mcp.p
 Check the Basic auth row in the health panel. Some hosts pass the Authorization header but never populate PHP_AUTH_USER, which is the only thing core reads. The bundled shim handles that case.
 
 == Changelog ==
+
+= 1.2.2.3 =
+* New: Fusion Builder (Avada) abilities. fdj/list-fusion-builder-elements parses a page's post_content into a flat list of elements, noting which style attributes are literal overrides versus inherited from the site's global theme (var(--awb-...) tokens). fdj/update-fusion-element sets or removes attributes on one located element, refusing to remove tags that can nest inside themselves (container/row/column). fdj/upload-media sideloads a URL into the media library. fdj/delete-post trashes a post/page, or deletes permanently with force.
+* New: fdj/list-options and fdj/get-option, restricted to theme and widget configuration (widget_*, sidebars_widgets, fusion_options, theme_mods_*, avada_*) so credentials and API keys are out of scope by design, not filtered after the fact. fdj/replace-in-option does a targeted find/replace inside one field of an option, with dry_run to preview.
+* Fixed: "Connect as", on both the Application Password screen and the Claude Desktop extension builder, listed every user with edit_posts — on membership or course sites that can be most of the subscriber base. Both now list administrators only, and always include the current user so the default selection can't silently land on someone else.
 
 = 1.2.2 =
 * Fixed: the bundled connector now rebuilds its session automatically when WordPress reports "Session not found: Invalid or expired session", instead of staying broken until the client is restarted.

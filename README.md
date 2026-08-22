@@ -146,13 +146,30 @@ Three things that silently break a release, all checked by `bin/release.sh`:
 ### Admin UI
 
 - **Toggle all / toggle none for the ability list.** Ticking eight boxes by hand is tedious on one site and worse across many. This is not only convenience: because saved toggles are preserved across updates, every release that adds an ability leaves it switched off on existing installs, and the omission is silent. sophere.org sat on four of eight abilities for several releases without anything on screen saying so. A bulk control plus a "3 new abilities added in this version" notice would close both gaps.
+- **Detect the active builder and only show its abilities.** The Fusion Builder group below is dead weight, and a confusing checkbox, on a site that isn't running Avada or an Avada child theme. Detect the active theme (or a constant/class Avada defines) and hide that group entirely when it doesn't apply, the same way a future Elementor or Divi group should only show on sites running those.
 
-### Next abilities to add
+### Fusion Builder abilities (Avada)
 
-- `fdj/list-fusion-builder-elements` — parse an Avada page's `post_content` and return the Fusion Builder shortcode tree as structured data, so edits can target a specific element instead of overwriting the whole page
-- `fdj/update-post-meta` — read/write arbitrary post meta (Avada often stores layout options in meta, not just post_content)
-- `fdj/get-theme-options` — read Avada's global theme option settings
-- `fdj/upload-media` — upload an image/file to the media library and return its attachment ID + URL, for use in Fusion Builder image elements
+Built and shipping:
+
+- `fdj/list-fusion-builder-elements` — read. Parses a page's `post_content` into a flat list of elements: type, position, a text preview, and which style attributes are literal overrides versus inherited from the site's global theme (`var(--awb-...)` tokens).
+- `fdj/update-fusion-element` — write. Sets attributes on one located element, or removes it. Refuses to remove tags that can nest inside themselves (container/row/column).
+- `fdj/upload-media` — write. Sideloads a URL into the media library.
+- `fdj/delete-post` — write. Trashes a post/page; `force` for permanent delete.
+
+Still needed:
+
+- `fdj/update-post-meta` — Avada sometimes stores per-page layout overrides in post meta, not `post_content`. Not yet proven necessary against a real page; add when one turns up.
+
+Phase 2, for site-wide changes ("make every H1 74px") rather than one page at a time:
+
+- `fdj/get-theme-options` — read Avada's global Theme Options.
+- `fdj/update-theme-options` — write.
+- A site-wide version of `list-fusion-builder-elements`, to find every element with a literal override on a given property before a global change silently gets masked by them.
+
+### Other builders
+
+Elementor and Divi, once Fusion Builder is solid and this ships. Divi next.
 
 ## Version history
 

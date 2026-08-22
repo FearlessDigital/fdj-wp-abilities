@@ -184,12 +184,21 @@ class FDJ_MCP_Bundle {
 	 * Render the extension section on the settings screen.
 	 */
 	public static function render_section() {
+		// Same reasoning as the "Connect" section above: restrict to admins
+		// and always include the current user so the preselection can't
+		// silently fall back to row one.
 		$users = get_users(
 			array(
-				'capability' => 'edit_posts',
-				'number'     => 100,
+				'role'   => 'administrator',
+				'number' => 100,
 			)
 		);
+
+		$current_user = wp_get_current_user();
+
+		if ( $current_user->exists() && ! in_array( $current_user->ID, wp_list_pluck( $users, 'ID' ), true ) ) {
+			array_unshift( $users, $current_user );
+		}
 		?>
 		<h2><?php esc_html_e( 'Claude Desktop extension', 'fdj-wp-abilities' ); ?></h2>
 
