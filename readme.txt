@@ -4,7 +4,7 @@ Tags: mcp, ai, claude, abilities, rest-api
 Requires at least: 6.9
 Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: 1.3.1
+Stable tag: 1.3.2
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -48,6 +48,9 @@ On WordPress 6.9 and 7.0 an ability must set `meta.show_in_rest` and `meta.mcp.p
 Check the Basic auth row in the health panel. Some hosts pass the Authorization header but never populate PHP_AUTH_USER, which is the only thing core reads. The bundled shim handles that case.
 
 == Changelog ==
+
+= 1.3.2 =
+* New: fdj/get-post-meta. WooCommerce's own native abilities (woocommerce/products-query, product-update) expose only a fixed catalog field set with no custom-fields escape hatch (confirmed: additionalProperties is false on both their input and output schemas), so there was no way to see something a plugin bolted on as product meta, e.g. a "Gravity Forms Product Add-Ons for WooCommerce"-style link between a product and a form. Not restricted to a safe-prefix allowlist the way fdj/get-option is, since post meta is essentially never where a real secret lives; gated on the same can_edit_post check as everything else that touches one specific post.
 
 = 1.3.1 =
 * Fixed: every gravityforms/* ability returned "Permission denied" for an administrator on a site where Gravity Forms' own granular capability system (gravityforms_view_entries, gravityforms_edit_forms) was never seeded onto any role, which is the case on plenty of real, long-running installs, PWDCNC included. Both permission checks now fall back to manage_options, the same bar this plugin already trusts for comparably sensitive abilities, so an administrator is never locked out just because GF's own capability setup was never run.

@@ -46,6 +46,7 @@ No SFTP, no file editing, no config files.
 | `fdj/restore-revision` | Roll a post back to a stored revision | Write | Off |
 | `fdj/list-media` | Search/list media library attachments by title, caption, MIME type | Read | Off |
 | `fdj/get-media` | One attachment by ID, with every registered image size and its own URL/dimensions | Read | Off |
+| `fdj/get-post-meta` | Every custom field on one post/page/product — the WooCommerce native abilities have no custom-fields escape hatch | Read | Off |
 
 Every ability checks WordPress capabilities (`edit_post`, `edit_posts`, `create_posts`) through its `permission_callback`, so access is bounded by whichever user authenticates the connection. There is no bypass of core capability checks. Writes ship disabled so a freshly activated site can read and nothing more until someone decides otherwise.
 
@@ -213,6 +214,7 @@ Deliberately not built:
 
 ## Version history
 
+- `1.3.2` — fdj/get-post-meta, for reading custom/plugin fields on a post, page, or WooCommerce product. woocommerce/products-query and product-update are both hard-capped to a fixed catalog field set (`additionalProperties: false`) with no way to see something like a product-to-form link a plugin stored as post meta.
 - `1.3.1` — fixed gravityforms/* abilities returning Permission denied for an administrator on any site where Gravity Forms' own granular capabilities were never seeded onto a role (common on older installs); both permission checks now fall back to manage_options
 - `1.3.0` — Gravity Forms abilities (list-forms, get-form, list-entries, get-entry, list-feeds, list-addons), read-only, active only when Gravity Forms is present. Settings screen groups abilities by the theme/plugin they require, hides a group entirely when it is not active, and preserves a hidden group's saved toggles rather than wiping them. Added select-all and per-group select-all/none. Added `fdj/list-media` and `fdj/get-media`, closing the read-side gap next to the existing write-only `fdj/upload-media`.
 - `1.0.1` — health panel no longer reports "working natively" when another mu-plugin is actually supplying `PHP_AUTH_USER`; it now detects duplicates and says so

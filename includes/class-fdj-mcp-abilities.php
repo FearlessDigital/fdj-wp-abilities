@@ -475,6 +475,51 @@ class FDJ_MCP_Abilities {
 				'permission_callback' => array( __CLASS__, 'can_upload_files' ),
 			),
 
+			'fdj/get-post-meta' => array(
+				'is_write'            => false,
+				'label'               => 'Get Post Meta',
+				'description'         => 'Read every custom field stored on one post, page, or WooCommerce product (products are posts under the hood). WooCommerce\'s own native abilities expose only a fixed catalog field set, name/price/stock/status/etc. with no custom-fields escape hatch, so this is the only way to see something a plugin bolted on as post meta, e.g. a "Gravity Forms Product Add-Ons for WooCommerce"-style link between a product and a form. Pass "keys" to fetch specific meta keys instead of everything.',
+				'category'            => 'site',
+				'annotations'         => array(
+					'readonly'    => true,
+					'destructive' => false,
+					'idempotent'  => true,
+				),
+				'input_schema'        => array(
+					'type'       => 'object',
+					'properties' => array(
+						'post_id' => array(
+							'type'        => 'integer',
+							'description' => 'The post, page, or product ID.',
+						),
+						'keys'    => array(
+							'type'        => 'array',
+							'items'       => array( 'type' => 'string' ),
+							'description' => 'Optional. Fetch only these meta keys instead of every key on the post.',
+						),
+					),
+					'required'   => array( 'post_id' ),
+				),
+				'output_schema'       => array(
+					'type'       => 'object',
+					'properties' => array(
+						'post_id' => array( 'type' => 'integer' ),
+						'meta'    => array(
+							'type'  => 'array',
+							'items' => array(
+								'type'       => 'object',
+								'properties' => array(
+									'key'   => array( 'type' => 'string' ),
+									'value' => array( 'description' => 'A single value, or an array when this key is genuinely stored with more than one value.' ),
+								),
+							),
+						),
+					),
+				),
+				'execute_callback'    => array( __CLASS__, 'execute_get_post_meta' ),
+				'permission_callback' => array( __CLASS__, 'can_edit_post' ),
+			),
+
 			/* --------------------------------------------------------- WRITE */
 
 			'fdj/replace-in-post' => array(
@@ -1735,6 +1780,50 @@ class FDJ_MCP_Abilities {
 		$out['sizes'] = $sizes;
 
 		return $out;
+	}
+
+	/**
+	 * Read every (or every requested) meta key on one post/page/product.
+	 *
+	 * Deliberately not restricted to a safe-prefix allowlist the way
+	 * fdj/get-option is: wp_options is where real secrets and API keys live,
+	 * post meta on a product or page essentially never is, it is what plugins
+	 * use to store structured configuration and content. Gated on can_edit_post
+	 * like everything else that reads or writes one specific post, same as
+	 * post_content already is, this is not a new category of exposure.
+	 *
+	 * @param array $input Ability input.
+	 * @return array|WP_Error
+	 */
+	public static function execute_get_post_meta( $input = array() ) {
+		$post_id = isset( $input['post_id'] ) ? (int) $input['post_id'] : 0;
+
+		if ( ! get_post( $post_id ) ) {
+			return new WP_Error( 'fdj_not_found', 'No post found with that ID.' );
+		}
+
+		$requested_keys = ( isset( $input['keys'] ) && is_array( $input['keys'] ) && $input['keys'] )
+			? array_map( 'sanitize_text_field', $input['keys'] )
+			: array();
+
+		$all = get_post_meta( $post_id );
+		$out = array();
+
+		foreach ( $all as $key => $values ) {
+			if ( $requested_keys && ! in_array( $key, $requested_keys, true ) ) {
+				continue;
+			}
+
+			$out[] = array(
+				'key'   => $key,
+				'value' => ( 1 === count( $values ) ) ? maybe_unserialize( $values[0] ) : array_map( 'maybe_unserialize', $values ),
+			);
+		}
+
+		return array(
+			'post_id' => $post_id,
+			'meta'    => $out,
+		);
 	}
 
 	/**
