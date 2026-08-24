@@ -213,6 +213,7 @@ Deliberately not built:
 
 ## Version history
 
+- `1.3.1` — fixed gravityforms/* abilities returning Permission denied for an administrator on any site where Gravity Forms' own granular capabilities were never seeded onto a role (common on older installs); both permission checks now fall back to manage_options
 - `1.3.0` — Gravity Forms abilities (list-forms, get-form, list-entries, get-entry, list-feeds, list-addons), read-only, active only when Gravity Forms is present. Settings screen groups abilities by the theme/plugin they require, hides a group entirely when it is not active, and preserves a hidden group's saved toggles rather than wiping them. Added select-all and per-group select-all/none. Added `fdj/list-media` and `fdj/get-media`, closing the read-side gap next to the existing write-only `fdj/upload-media`.
 - `1.0.1` — health panel no longer reports "working natively" when another mu-plugin is actually supplying `PHP_AUTH_USER`; it now detects duplicates and says so
 - `1.0.0` — self-contained release: auth shim, admin setup screen with credential generation, health panel, audit log, per-ability toggles, writes off by default

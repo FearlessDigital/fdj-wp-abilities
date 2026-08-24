@@ -4,7 +4,7 @@ Tags: mcp, ai, claude, abilities, rest-api
 Requires at least: 6.9
 Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: 1.3.0
+Stable tag: 1.3.1
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -48,6 +48,9 @@ On WordPress 6.9 and 7.0 an ability must set `meta.show_in_rest` and `meta.mcp.p
 Check the Basic auth row in the health panel. Some hosts pass the Authorization header but never populate PHP_AUTH_USER, which is the only thing core reads. The bundled shim handles that case.
 
 == Changelog ==
+
+= 1.3.1 =
+* Fixed: every gravityforms/* ability returned "Permission denied" for an administrator on a site where Gravity Forms' own granular capability system (gravityforms_view_entries, gravityforms_edit_forms) was never seeded onto any role, which is the case on plenty of real, long-running installs, PWDCNC included. Both permission checks now fall back to manage_options, the same bar this plugin already trusts for comparably sensitive abilities, so an administrator is never locked out just because GF's own capability setup was never run.
 
 = 1.3.0 =
 * New: Gravity Forms abilities (gravityforms/list-forms, get-form, list-entries, get-entry, list-feeds, list-addons), active only on sites that run Gravity Forms and invisible everywhere else. gravityforms/get-form's notifications and confirmations sections are the fast path to diagnosing a form that emails the wrong people or redirects somewhere unexpected after submit. gravityforms/list-feeds surfaces every add-on feed on a form (e.g. a WooCommerce order feed) regardless of which add-on created it. Entry field values in list-entries and get-entry are labeled using the form's own field labels instead of raw numeric field IDs. All six are read-only; there is deliberately no notification-resend ability.

@@ -377,23 +377,32 @@ class FDJ_MCP_GravityForms {
 	 * ----------------------------------------------------------------- */
 
 	/**
-	 * Can the current user view entries? Gravity Forms' own capability, not a
-	 * WordPress core one; GF grants it to Administrator by default.
+	 * Can the current user view entries?
+	 *
+	 * Checks Gravity Forms' own capability first, since that is the correct,
+	 * least-privilege answer when GF's granular capability system has been
+	 * set up. Falls back to manage_options because plenty of real installs
+	 * never ran that setup at all, GF's own admin screens still work fine for
+	 * an administrator on those sites since GF checks manage_options
+	 * internally in that case, and this plugin already trusts manage_options
+	 * as its bar for comparably sensitive abilities (see can_manage_options()
+	 * in FDJ_MCP_Abilities). Without the fallback, a site like that would
+	 * register every gravityforms/* ability and then refuse all of them.
 	 *
 	 * @return bool
 	 */
 	public static function can_view_gf_entries() {
-		return current_user_can( 'gravityforms_view_entries' );
+		return current_user_can( 'gravityforms_view_entries' ) || current_user_can( 'manage_options' );
 	}
 
 	/**
 	 * Can the current user view/edit form configuration (fields, notifications,
-	 * confirmations, feeds, add-ons)?
+	 * confirmations, feeds, add-ons)? Same reasoning as can_view_gf_entries().
 	 *
 	 * @return bool
 	 */
 	public static function can_view_gf_forms() {
-		return current_user_can( 'gravityforms_edit_forms' );
+		return current_user_can( 'gravityforms_edit_forms' ) || current_user_can( 'manage_options' );
 	}
 
 	/* -----------------------------------------------------------------
