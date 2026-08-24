@@ -2,7 +2,7 @@
 /**
  * Plugin Name:       FDJ WordPress Abilities for MCP
  * Description:       Self-contained MCP toolkit for WordPress. Registers page/post abilities, repairs Application Password auth on nginx/PHP-FPM hosts, and adds one-click connection setup, a health panel, and an audit log. Upload, activate, go.
- * Version:           1.2.2.3
+ * Version:           1.3.0
  * Requires at least: 6.9
  * Requires PHP:      7.4
  * Author:            Fearless Digital Journey
@@ -28,7 +28,7 @@
 
 defined( 'ABSPATH' ) || exit;
 
-define( 'FDJ_MCP_VERSION', '1.2.2.3' );
+define( 'FDJ_MCP_VERSION', '1.3.0' );
 define( 'FDJ_MCP_FILE', __FILE__ );
 define( 'FDJ_MCP_DIR', plugin_dir_path( __FILE__ ) );
 define( 'FDJ_MCP_OPTION', 'fdj_mcp_settings' );
@@ -101,6 +101,7 @@ if ( empty( $_SERVER['PHP_AUTH_USER'] )
 }
 
 require_once FDJ_MCP_DIR . 'includes/class-fdj-mcp-abilities.php';
+require_once FDJ_MCP_DIR . 'includes/class-fdj-mcp-gravityforms.php';
 require_once FDJ_MCP_DIR . 'includes/class-fdj-mcp-health.php';
 require_once FDJ_MCP_DIR . 'includes/class-fdj-mcp-audit.php';
 require_once FDJ_MCP_DIR . 'includes/class-fdj-mcp-bundle.php';
@@ -157,7 +158,75 @@ function fdj_mcp_server_url() {
 	return rest_url( FDJ_MCP_SERVER_PATH );
 }
 
+/**
+ * Ability definitions from every provider this plugin ships, merged.
+ *
+ * FDJ_MCP_Abilities covers core WordPress content; FDJ_MCP_GravityForms
+ * covers Gravity Forms and is empty on any site not running it. Settings,
+ * Health, and Audit all need the full set, not just the first provider's, so
+ * this is the one place that knows the complete list — the same place the
+ * require_once calls above already do.
+ *
+ * @return array<string, array>
+ */
+function fdj_mcp_all_ability_definitions() {
+	return array_merge(
+		FDJ_MCP_Abilities::get_definitions(),
+		FDJ_MCP_GravityForms::get_definitions()
+	);
+}
+
+/**
+ * Whether the theme or plugin a "requires" tag names is actually active here.
+ *
+ * An empty tag means "core WordPress only", which is always true. An unknown
+ * tag fails closed (false) rather than guessing, so a typo in a future
+ * `requires` value hides an ability instead of silently exposing it everywhere.
+ *
+ * @param string $requires One of the tags below, or empty.
+ * @return bool
+ */
+function fdj_mcp_integration_detected( $requires ) {
+	if ( empty( $requires ) ) {
+		return true;
+	}
+
+	switch ( $requires ) {
+		case 'avada':
+			// Fusion Builder is the plugin that actually parses the shortcodes
+			// these abilities touch; it ships bundled with the Avada theme but
+			// either constant alone is enough to know the shortcodes will render.
+			return defined( 'FUSION_BUILDER_VERSION' ) || defined( 'AVADA_VERSION' ) || function_exists( 'fusion_builder_map' );
+
+		case 'gravityforms':
+			return class_exists( 'GFAPI' );
+
+		default:
+			return false;
+	}
+}
+
+/**
+ * Ability definitions whose "requires" tag (if any) is satisfied on this site.
+ *
+ * This is the list that should actually be registered or shown as a toggle.
+ * fdj_mcp_all_ability_definitions() is still what settings-save validates
+ * against, so a theme or plugin that is only temporarily inactive does not
+ * lose its saved on/off state, only its visibility.
+ *
+ * @return array<string, array>
+ */
+function fdj_mcp_available_ability_definitions() {
+	return array_filter(
+		fdj_mcp_all_ability_definitions(),
+		function ( $def ) {
+			return fdj_mcp_integration_detected( isset( $def['requires'] ) ? $def['requires'] : '' );
+		}
+	);
+}
+
 FDJ_MCP_Abilities::init();
+FDJ_MCP_GravityForms::init();
 FDJ_MCP_Health::init();
 FDJ_MCP_Audit::init();
 FDJ_MCP_Bundle::init();

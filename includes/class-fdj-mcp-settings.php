@@ -173,13 +173,22 @@ class FDJ_MCP_Settings {
 	 * @return array
 	 */
 	private static function handle_save_abilities() {
-		$posted = isset( $_POST['enabled_abilities'] ) ? (array) wp_unslash( $_POST['enabled_abilities'] ) : array();
-		$known  = array_keys( FDJ_MCP_Abilities::get_definitions() );
+		$posted    = isset( $_POST['enabled_abilities'] ) ? (array) wp_unslash( $_POST['enabled_abilities'] ) : array();
+		$posted    = array_map( 'sanitize_text_field', $posted );
+		$available = array_keys( fdj_mcp_available_ability_definitions() );
 
-		$enabled = array_values( array_intersect( $known, array_map( 'sanitize_text_field', $posted ) ) );
+		$settings = fdj_mcp_get_settings();
+		$existing = (array) $settings['enabled_abilities'];
 
-		$settings                      = fdj_mcp_get_settings();
-		$settings['enabled_abilities'] = $enabled;
+		// Only decide the on/off state of abilities that were actually shown on
+		// screen. One hidden right now, because its theme or plugin is not
+		// active, keeps whatever was last saved for it instead of being
+		// silently switched off just because this submission never had a
+		// checkbox for it to begin with.
+		$untouched = array_diff( $existing, $available );
+		$chosen    = array_values( array_intersect( $available, $posted ) );
+
+		$settings['enabled_abilities'] = array_values( array_unique( array_merge( $untouched, $chosen ) ) );
 		$settings['audit_enabled']     = ! empty( $_POST['audit_enabled'] );
 
 		update_option( FDJ_MCP_OPTION, $settings );
@@ -351,55 +360,98 @@ class FDJ_MCP_Settings {
 	 */
 	private static function render_abilities( $settings ) {
 		$enabled = (array) $settings['enabled_abilities'];
+
+		$group_labels = array(
+			'core'         => __( 'Core (any WordPress site)', 'fdj-wp-abilities' ),
+			'avada'        => __( 'Avada / Fusion Builder', 'fdj-wp-abilities' ),
+			'gravityforms' => __( 'Gravity Forms', 'fdj-wp-abilities' ),
+		);
+
+		// Bucket by the "requires" tag. Nothing not currently detected reaches
+		// this list at all: fdj_mcp_available_ability_definitions() already
+		// dropped it, which is the whole point, we do not want a Gravity Forms
+		// row on a site that is not running Gravity Forms.
+		$groups = array();
+
+		foreach ( fdj_mcp_available_ability_definitions() as $ability_name => $def ) {
+			$key              = ( isset( $def['requires'] ) && '' !== $def['requires'] ) ? $def['requires'] : 'core';
+			$groups[ $key ][ $ability_name ] = $def;
+		}
+
+		// Core first, then known integrations in a fixed order, then anything
+		// else, e.g. a future "requires" tag this screen has not been taught a
+		// label for yet, still shown rather than silently dropped.
+		$order = array_values( array_intersect( array_keys( $group_labels ), array_keys( $groups ) ) );
+		$order = array_unique( array_merge( array( 'core' ), $order, array_keys( $groups ) ) );
 		?>
 		<h2><?php esc_html_e( 'Abilities', 'fdj-wp-abilities' ); ?></h2>
 		<p class="description" style="max-width:900px">
-			<?php esc_html_e( 'Only enabled abilities are registered and exposed. Write abilities are off by default. Whatever you enable is still bounded by the connected user\'s WordPress capabilities.', 'fdj-wp-abilities' ); ?>
+			<?php esc_html_e( 'Only enabled abilities are registered and exposed. Write abilities are off by default. Whatever you enable is still bounded by the connected user\'s WordPress capabilities. A group only appears here when its theme or plugin is actually active on this site; a group that later goes inactive keeps its saved toggles, it just stops showing until it is active again.', 'fdj-wp-abilities' ); ?>
 		</p>
 
 		<form method="post">
 			<?php wp_nonce_field( 'fdj_mcp_save_abilities', 'fdj_mcp_nonce' ); ?>
 			<input type="hidden" name="fdj_mcp_action" value="save_abilities" />
 
-			<table class="widefat striped" style="max-width:900px">
-				<thead>
-					<tr>
-						<th style="width:60px"><?php esc_html_e( 'On', 'fdj-wp-abilities' ); ?></th>
-						<th style="width:220px"><?php esc_html_e( 'Ability', 'fdj-wp-abilities' ); ?></th>
-						<th style="width:90px"><?php esc_html_e( 'Type', 'fdj-wp-abilities' ); ?></th>
-						<th><?php esc_html_e( 'Description', 'fdj-wp-abilities' ); ?></th>
-					</tr>
-				</thead>
-				<tbody>
-				<?php foreach ( FDJ_MCP_Abilities::get_definitions() as $ability_name => $def ) : ?>
-					<tr>
-						<td>
-							<input
-								type="checkbox"
-								name="enabled_abilities[]"
-								value="<?php echo esc_attr( $ability_name ); ?>"
-								id="ability-<?php echo esc_attr( sanitize_html_class( $ability_name ) ); ?>"
-								<?php checked( in_array( $ability_name, $enabled, true ) ); ?>
-							/>
-						</td>
-						<th scope="row">
-							<label for="ability-<?php echo esc_attr( sanitize_html_class( $ability_name ) ); ?>">
-								<?php echo esc_html( $def['label'] ); ?><br />
-								<code style="font-size:11px"><?php echo esc_html( $ability_name ); ?></code>
-							</label>
-						</th>
-						<td>
-							<?php if ( $def['is_write'] ) : ?>
-								<span style="color:#b32d2e;font-weight:600"><?php esc_html_e( 'Write', 'fdj-wp-abilities' ); ?></span>
-							<?php else : ?>
-								<span style="color:#2271b1"><?php esc_html_e( 'Read', 'fdj-wp-abilities' ); ?></span>
-							<?php endif; ?>
-						</td>
-						<td><span class="description"><?php echo esc_html( $def['description'] ); ?></span></td>
-					</tr>
-				<?php endforeach; ?>
-				</tbody>
-			</table>
+			<p style="max-width:900px">
+				<label>
+					<input type="checkbox" id="fdj-mcp-select-all" />
+					<strong><?php esc_html_e( 'Select all', 'fdj-wp-abilities' ); ?></strong>
+				</label>
+			</p>
+
+			<?php foreach ( $order as $group_key ) : ?>
+				<?php if ( empty( $groups[ $group_key ] ) ) : continue; endif; ?>
+
+				<h3 style="margin-bottom:4px">
+					<?php echo esc_html( isset( $group_labels[ $group_key ] ) ? $group_labels[ $group_key ] : $group_key ); ?>
+					<button type="button" class="button-link fdj-mcp-group-toggle" data-group="<?php echo esc_attr( $group_key ); ?>" style="font-size:12px;font-weight:400;margin-left:8px">
+						<?php esc_html_e( '(select all / none)', 'fdj-wp-abilities' ); ?>
+					</button>
+				</h3>
+
+				<table class="widefat striped" style="max-width:900px;margin-bottom:20px">
+					<thead>
+						<tr>
+							<th style="width:60px"><?php esc_html_e( 'On', 'fdj-wp-abilities' ); ?></th>
+							<th style="width:220px"><?php esc_html_e( 'Ability', 'fdj-wp-abilities' ); ?></th>
+							<th style="width:90px"><?php esc_html_e( 'Type', 'fdj-wp-abilities' ); ?></th>
+							<th><?php esc_html_e( 'Description', 'fdj-wp-abilities' ); ?></th>
+						</tr>
+					</thead>
+					<tbody>
+					<?php foreach ( $groups[ $group_key ] as $ability_name => $def ) : ?>
+						<tr>
+							<td>
+								<input
+									type="checkbox"
+									class="fdj-mcp-ability-checkbox"
+									data-group="<?php echo esc_attr( $group_key ); ?>"
+									name="enabled_abilities[]"
+									value="<?php echo esc_attr( $ability_name ); ?>"
+									id="ability-<?php echo esc_attr( sanitize_html_class( $ability_name ) ); ?>"
+									<?php checked( in_array( $ability_name, $enabled, true ) ); ?>
+								/>
+							</td>
+							<th scope="row">
+								<label for="ability-<?php echo esc_attr( sanitize_html_class( $ability_name ) ); ?>">
+									<?php echo esc_html( $def['label'] ); ?><br />
+									<code style="font-size:11px"><?php echo esc_html( $ability_name ); ?></code>
+								</label>
+							</th>
+							<td>
+								<?php if ( $def['is_write'] ) : ?>
+									<span style="color:#b32d2e;font-weight:600"><?php esc_html_e( 'Write', 'fdj-wp-abilities' ); ?></span>
+								<?php else : ?>
+									<span style="color:#2271b1"><?php esc_html_e( 'Read', 'fdj-wp-abilities' ); ?></span>
+								<?php endif; ?>
+							</td>
+							<td><span class="description"><?php echo esc_html( $def['description'] ); ?></span></td>
+						</tr>
+					<?php endforeach; ?>
+					</tbody>
+				</table>
+			<?php endforeach; ?>
 
 			<p style="margin-top:12px">
 				<label>
@@ -410,6 +462,33 @@ class FDJ_MCP_Settings {
 
 			<?php submit_button( __( 'Save', 'fdj-wp-abilities' ) ); ?>
 		</form>
+
+		<script>
+		( function () {
+			function abilityCheckboxes( group ) {
+				var selector = group
+					? '.fdj-mcp-ability-checkbox[data-group="' + group + '"]'
+					: '.fdj-mcp-ability-checkbox';
+				return Array.prototype.slice.call( document.querySelectorAll( selector ) );
+			}
+
+			var selectAll = document.getElementById( 'fdj-mcp-select-all' );
+
+			if ( selectAll ) {
+				selectAll.addEventListener( 'change', function () {
+					abilityCheckboxes().forEach( function ( cb ) { cb.checked = selectAll.checked; } );
+				} );
+			}
+
+			Array.prototype.forEach.call( document.querySelectorAll( '.fdj-mcp-group-toggle' ), function ( btn ) {
+				btn.addEventListener( 'click', function () {
+					var boxes = abilityCheckboxes( btn.getAttribute( 'data-group' ) );
+					var allChecked = boxes.every( function ( cb ) { return cb.checked; } );
+					boxes.forEach( function ( cb ) { cb.checked = ! allChecked; } );
+				} );
+			} );
+		} )();
+		</script>
 		<?php
 	}
 

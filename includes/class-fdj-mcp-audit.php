@@ -40,8 +40,10 @@ class FDJ_MCP_Audit {
 			return;
 		}
 
-		// Only log our own abilities. Other plugins can look after themselves.
-		if ( 0 !== strpos( (string) $ability_name, 'fdj/' ) ) {
+		// Only log abilities this plugin registers. Other plugins can look
+		// after themselves. Checked against the real merged list rather than a
+		// hardcoded "fdj/" prefix, since gravityforms/* abilities are ours too.
+		if ( ! array_key_exists( (string) $ability_name, fdj_mcp_all_ability_definitions() ) ) {
 			return;
 		}
 

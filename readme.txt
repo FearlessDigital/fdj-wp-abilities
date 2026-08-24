@@ -4,7 +4,7 @@ Tags: mcp, ai, claude, abilities, rest-api
 Requires at least: 6.9
 Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: 1.2.2.3
+Stable tag: 1.3.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -14,7 +14,7 @@ Connect a WordPress site to Claude over the Model Context Protocol. Upload, acti
 
 Registers WordPress Abilities so the MCP Adapter's default server can expose page and post operations to an AI client, and bundles everything else a site needs to actually connect:
 
-* Eight page/post abilities (list, search, read, revisions, replace, update, create, restore), each bounded by normal WordPress capability checks
+* Page/post/media abilities (list, search, read, revisions, replace, update, create, restore), each bounded by normal WordPress capability checks, plus a Fusion Builder (Avada) group and a Gravity Forms group that only appear on a site actually running that theme or plugin
 * A Basic auth compatibility shim for hosts that do not populate PHP_AUTH_USER
 * One-click setup that generates an Application Password and returns a paste-ready connection command
 * A health panel covering every known failure mode in the connection chain
@@ -48,6 +48,13 @@ On WordPress 6.9 and 7.0 an ability must set `meta.show_in_rest` and `meta.mcp.p
 Check the Basic auth row in the health panel. Some hosts pass the Authorization header but never populate PHP_AUTH_USER, which is the only thing core reads. The bundled shim handles that case.
 
 == Changelog ==
+
+= 1.3.0 =
+* New: Gravity Forms abilities (gravityforms/list-forms, get-form, list-entries, get-entry, list-feeds, list-addons), active only on sites that run Gravity Forms and invisible everywhere else. gravityforms/get-form's notifications and confirmations sections are the fast path to diagnosing a form that emails the wrong people or redirects somewhere unexpected after submit. gravityforms/list-feeds surfaces every add-on feed on a form (e.g. a WooCommerce order feed) regardless of which add-on created it. Entry field values in list-entries and get-entry are labeled using the form's own field labels instead of raw numeric field IDs. All six are read-only; there is deliberately no notification-resend ability.
+* Settings, the health panel, and the audit log now all read from the combined ability list across every provider this plugin ships, not just the original page/post set.
+* New: theme/plugin detection. An ability can carry a "requires" tag (avada, gravityforms); a tag that is not currently active hides that ability from the settings screen entirely and skips registering it, instead of showing a checkbox that could never do anything. The two existing Fusion Builder abilities are now tagged this way too, so they no longer appear on a site that isn't running Avada. A saved toggle for a currently-hidden ability is preserved, not lost, so switching a theme back on restores it.
+* New: Select all, plus a per-group select all/none, on the abilities screen.
+* New: fdj/list-media and fdj/get-media. fdj/upload-media was write-only with no way to check whether an image already exists, or resolve a filename to an attachment_id, without guessing. fdj/get-media also returns every registered image size with its own URL and dimensions.
 
 = 1.2.2.3 =
 * New: Fusion Builder (Avada) abilities. fdj/list-fusion-builder-elements parses a page's post_content into a flat list of elements, noting which style attributes are literal overrides versus inherited from the site's global theme (var(--awb-...) tokens). fdj/update-fusion-element sets or removes attributes on one located element, refusing to remove tags that can nest inside themselves (container/row/column). fdj/upload-media sideloads a URL into the media library. fdj/delete-post trashes a post/page, or deletes permanently with force.

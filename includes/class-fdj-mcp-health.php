@@ -324,7 +324,11 @@ class FDJ_MCP_Health {
 		$visible = 0;
 		$missing = array();
 
-		foreach ( FDJ_MCP_Abilities::get_definitions() as $name => $def ) {
+		// available_ability_definitions(), not all_ability_definitions(): an
+		// ability whose theme/plugin is not active right now is correctly
+		// unregistered, not broken. Counting it here would report a false
+		// problem every time a site simply is not running Avada, say.
+		foreach ( fdj_mcp_available_ability_definitions() as $name => $def ) {
 			if ( ! fdj_mcp_is_ability_enabled( $name ) ) {
 				continue;
 			}

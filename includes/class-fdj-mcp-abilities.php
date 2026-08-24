@@ -269,6 +269,7 @@ class FDJ_MCP_Abilities {
 
 			'fdj/list-fusion-builder-elements' => array(
 				'is_write'            => false,
+				'requires'            => 'avada',
 				'label'               => 'List Fusion Builder Elements',
 				'description'         => 'Parse a page\'s Fusion Builder shortcode tree into a flat list of elements: tag, position, a short text preview, and which style attributes are literal overrides versus inherited from the site\'s global Avada theme settings (an inherited value reads as a var(--awb-...) token; an override is a literal value like "80px"). Flags fusion_global references separately, since those are reusable blocks stored as their own post and need a separate fdj/get-post call to reach. Use this before editing one element so a write can target it precisely instead of touching the whole page.',
 				'category'            => 'site',
@@ -376,6 +377,102 @@ class FDJ_MCP_Abilities {
 				),
 				'execute_callback'    => array( __CLASS__, 'execute_get_option' ),
 				'permission_callback' => array( __CLASS__, 'can_manage_options' ),
+			),
+
+			'fdj/list-media' => array(
+				'is_write'            => false,
+				'label'               => 'List Media',
+				'description'         => 'Search or list media library attachments by title/caption text, MIME type, and date. Use this before fdj/upload-media to check whether an image already exists rather than uploading a duplicate, or to find an attachment_id to reuse in fdj/update-fusion-element. The search also tends to catch filenames, since WordPress derives the initial title from the uploaded filename, but a file whose title was changed afterward, or that was renamed only on disk, will not match by filename alone.',
+				'category'            => 'site',
+				'annotations'         => array(
+					'readonly'    => true,
+					'destructive' => false,
+					'idempotent'  => true,
+				),
+				'input_schema'        => array(
+					'type'       => 'object',
+					'properties' => array(
+						'search'    => array(
+							'type'        => 'string',
+							'description' => 'Optional search term matched against title and caption.',
+						),
+						'mime_type' => array(
+							'type'        => 'string',
+							'description' => 'Optional MIME type filter. A partial type like "image" matches every image/* subtype; a full type like "application/pdf" matches only that.',
+						),
+						'per_page'  => array(
+							'type'        => 'integer',
+							'description' => 'Max results to return. Defaults to 20, capped at 100.',
+							'default'     => 20,
+						),
+						'page'      => array(
+							'type'        => 'integer',
+							'description' => 'Page number, 1-based. Defaults to 1.',
+							'default'     => 1,
+						),
+					),
+				),
+				'output_schema'       => array(
+					'type'  => 'array',
+					'items' => array(
+						'type'       => 'object',
+						'properties' => array(
+							'attachment_id' => array( 'type' => 'integer' ),
+							'title'         => array( 'type' => 'string' ),
+							'filename'      => array( 'type' => 'string' ),
+							'mime_type'     => array( 'type' => 'string' ),
+							'url'           => array( 'type' => 'string' ),
+							'alt_text'      => array( 'type' => 'string' ),
+							'width'         => array( 'type' => 'integer' ),
+							'height'        => array( 'type' => 'integer' ),
+							'file_size'     => array( 'type' => 'integer' ),
+							'date'          => array( 'type' => 'string' ),
+						),
+					),
+				),
+				'execute_callback'    => array( __CLASS__, 'execute_list_media' ),
+				'permission_callback' => array( __CLASS__, 'can_upload_files' ),
+			),
+
+			'fdj/get-media' => array(
+				'is_write'            => false,
+				'label'               => 'Get Media',
+				'description'         => 'Fetch one media library attachment by ID: full metadata, alt text, caption, description, the post it is attached to if any, and every registered image size with its own URL and dimensions.',
+				'category'            => 'site',
+				'annotations'         => array(
+					'readonly'    => true,
+					'destructive' => false,
+					'idempotent'  => true,
+				),
+				'input_schema'        => array(
+					'type'       => 'object',
+					'properties' => array(
+						'attachment_id' => array(
+							'type'        => 'integer',
+							'description' => 'The attachment ID.',
+						),
+					),
+					'required'   => array( 'attachment_id' ),
+				),
+				'output_schema'       => array(
+					'type'       => 'object',
+					'properties' => array(
+						'attachment_id'   => array( 'type' => 'integer' ),
+						'title'           => array( 'type' => 'string' ),
+						'filename'        => array( 'type' => 'string' ),
+						'mime_type'       => array( 'type' => 'string' ),
+						'url'             => array( 'type' => 'string' ),
+						'alt_text'        => array( 'type' => 'string' ),
+						'caption'         => array( 'type' => 'string' ),
+						'description'     => array( 'type' => 'string' ),
+						'parent_post_id'  => array( 'type' => 'integer' ),
+						'file_size'       => array( 'type' => 'integer' ),
+						'date'            => array( 'type' => 'string' ),
+						'sizes'           => array( 'type' => 'object' ),
+					),
+				),
+				'execute_callback'    => array( __CLASS__, 'execute_get_media' ),
+				'permission_callback' => array( __CLASS__, 'can_upload_files' ),
 			),
 
 			/* --------------------------------------------------------- WRITE */
@@ -564,6 +661,7 @@ class FDJ_MCP_Abilities {
 
 			'fdj/update-fusion-element' => array(
 				'is_write'            => true,
+				'requires'            => 'avada',
 				'label'               => 'Update or Remove a Fusion Builder Element',
 				'description'         => 'Change one Fusion Builder element\'s attributes (font size, color, a carousel\'s arrow toggle, anything that is a shortcode attribute), or remove the element entirely. Locate it first with fdj/list-fusion-builder-elements: element_type and occurrence together identify the same element in both abilities. Set an attribute to null (not an empty string) to clear it back to Avada\'s own default instead of pinning it to a literal value, prefer this over guessing a value that merely looks right. Refuses to remove layout wrapper tags (container, row, column), since those can nest inside themselves and a naive removal could take a whole section with it. Run with dry_run first.',
 				'category'            => 'site',
@@ -779,6 +877,10 @@ class FDJ_MCP_Abilities {
 		foreach ( self::get_definitions() as $name => $def ) {
 
 			if ( ! fdj_mcp_is_ability_enabled( $name ) ) {
+				continue;
+			}
+
+			if ( ! fdj_mcp_integration_detected( isset( $def['requires'] ) ? $def['requires'] : '' ) ) {
 				continue;
 			}
 
@@ -1525,6 +1627,114 @@ class FDJ_MCP_Abilities {
 			'option_name' => $name,
 			'value'       => get_option( $name ),
 		);
+	}
+
+	/**
+	 * Lean, list-friendly summary of one attachment. execute_get_media() builds
+	 * on top of this rather than duplicating it.
+	 *
+	 * @param WP_Post $post Attachment post.
+	 * @return array
+	 */
+	private static function summarize_attachment( $post ) {
+		$meta = wp_get_attachment_metadata( $post->ID );
+		$file = get_attached_file( $post->ID );
+
+		$file_size = isset( $meta['filesize'] ) ? (int) $meta['filesize'] : 0;
+
+		// Older attachments, and non-image files in general, were not always
+		// given a stored filesize at upload time. Fall back to a real stat
+		// only when metadata does not already have the answer.
+		if ( ! $file_size && $file && file_exists( $file ) ) {
+			$file_size = (int) filesize( $file );
+		}
+
+		return array(
+			'attachment_id' => (int) $post->ID,
+			'title'         => get_the_title( $post ),
+			'filename'      => $file ? wp_basename( $file ) : '',
+			'mime_type'     => $post->post_mime_type,
+			'url'           => (string) wp_get_attachment_url( $post->ID ),
+			'alt_text'      => (string) get_post_meta( $post->ID, '_wp_attachment_image_alt', true ),
+			'width'         => isset( $meta['width'] ) ? (int) $meta['width'] : 0,
+			'height'        => isset( $meta['height'] ) ? (int) $meta['height'] : 0,
+			'file_size'     => $file_size,
+			'date'          => $post->post_date,
+		);
+	}
+
+	/**
+	 * Search or list media library attachments.
+	 *
+	 * @param array $input Ability input.
+	 * @return array
+	 */
+	public static function execute_list_media( $input = array() ) {
+		$per_page = isset( $input['per_page'] ) ? (int) $input['per_page'] : 20;
+		$per_page = max( 1, min( 100, $per_page ) );
+		$page     = isset( $input['page'] ) ? max( 1, (int) $input['page'] ) : 1;
+
+		$args = array(
+			'post_type'      => 'attachment',
+			'post_status'    => 'inherit',
+			's'              => isset( $input['search'] ) ? (string) $input['search'] : '',
+			'posts_per_page' => $per_page,
+			'paged'          => $page,
+			'no_found_rows'  => true,
+		);
+
+		if ( ! empty( $input['mime_type'] ) ) {
+			$args['post_mime_type'] = (string) $input['mime_type'];
+		}
+
+		$query   = new WP_Query( $args );
+		$results = array();
+
+		foreach ( $query->posts as $post ) {
+			$results[] = self::summarize_attachment( $post );
+		}
+
+		return $results;
+	}
+
+	/**
+	 * Fetch one media attachment by ID, with every registered image size.
+	 *
+	 * @param array $input Ability input.
+	 * @return array|WP_Error
+	 */
+	public static function execute_get_media( $input = array() ) {
+		$post = get_post( isset( $input['attachment_id'] ) ? (int) $input['attachment_id'] : 0 );
+
+		if ( ! $post || 'attachment' !== $post->post_type ) {
+			return new WP_Error( 'fdj_not_found', 'No media attachment found with that ID.' );
+		}
+
+		$out                   = self::summarize_attachment( $post );
+		$out['caption']        = $post->post_excerpt;
+		$out['description']    = $post->post_content;
+		$out['parent_post_id'] = (int) $post->post_parent;
+
+		$meta  = wp_get_attachment_metadata( $post->ID );
+		$sizes = array();
+
+		if ( ! empty( $meta['sizes'] ) && is_array( $meta['sizes'] ) ) {
+			foreach ( array_keys( $meta['sizes'] ) as $size_name ) {
+				$src = wp_get_attachment_image_src( $post->ID, $size_name );
+
+				if ( $src ) {
+					$sizes[ $size_name ] = array(
+						'url'    => $src[0],
+						'width'  => $src[1],
+						'height' => $src[2],
+					);
+				}
+			}
+		}
+
+		$out['sizes'] = $sizes;
+
+		return $out;
 	}
 
 	/**

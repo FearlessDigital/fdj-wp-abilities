@@ -44,8 +44,25 @@ No SFTP, no file editing, no config files.
 | `fdj/update-post-content` | Overwrite a post's content, and optionally title/status | Write | Off |
 | `fdj/create-post` | Create a new post/page | Write | Off |
 | `fdj/restore-revision` | Roll a post back to a stored revision | Write | Off |
+| `fdj/list-media` | Search/list media library attachments by title, caption, MIME type | Read | Off |
+| `fdj/get-media` | One attachment by ID, with every registered image size and its own URL/dimensions | Read | Off |
 
 Every ability checks WordPress capabilities (`edit_post`, `edit_posts`, `create_posts`) through its `permission_callback`, so access is bounded by whichever user authenticates the connection. There is no bypass of core capability checks. Writes ship disabled so a freshly activated site can read and nothing more until someone decides otherwise.
+
+### Gravity Forms
+
+Only present on sites that run Gravity Forms; `get_definitions()` returns empty otherwise, so nothing appears here or in the settings screen on any other site. All six are read-only, gated on Gravity Forms' own `gravityforms_view_entries` / `gravityforms_edit_forms` capabilities rather than a WordPress core one.
+
+| Ability ID | What it does | Type | Default |
+|---|---|---|---|
+| `gravityforms/list-forms` | List every form: ID, title, active/trash state, field count | Read | Off |
+| `gravityforms/get-form` | Fields, notifications, confirmations, and settings for one form. `sections` narrows the response | Read | Off |
+| `gravityforms/list-entries` | Search/paginate a form's entries, field values labeled instead of raw numeric IDs | Read | Off |
+| `gravityforms/get-entry` | One entry by ID, same labeling | Read | Off |
+| `gravityforms/list-feeds` | Every add-on feed on a form (WooCommerce order feed, payment gateway, etc.), regardless of which add-on owns it | Read | Off |
+| `gravityforms/list-addons` | Every active Gravity Forms add-on site-wide | Read | Off |
+
+`gravityforms/get-form`'s `notifications` section is the direct answer to "who gets emailed and when a form is submitted"; `confirmations` shows whether submission redirects to another page rather than just displaying a message. There is deliberately no resend-notifications ability — that action replays a form's configured notification to whatever recipients are configured *today*, for entries that already ran once, and a mis-scoped bulk resend is exactly the kind of surprise this plugin exists to prevent, not enable.
 
 ## How Claude sees this
 
@@ -145,8 +162,14 @@ Three things that silently break a release, all checked by `bin/release.sh`:
 
 ### Admin UI
 
-- **Toggle all / toggle none for the ability list.** Ticking eight boxes by hand is tedious on one site and worse across many. This is not only convenience: because saved toggles are preserved across updates, every release that adds an ability leaves it switched off on existing installs, and the omission is silent. sophere.org sat on four of eight abilities for several releases without anything on screen saying so. A bulk control plus a "3 new abilities added in this version" notice would close both gaps.
-- **Detect the active builder and only show its abilities.** The Fusion Builder group below is dead weight, and a confusing checkbox, on a site that isn't running Avada or an Avada child theme. Detect the active theme (or a constant/class Avada defines) and hide that group entirely when it doesn't apply, the same way a future Elementor or Divi group should only show on sites running those.
+Built and shipping:
+
+- **Select all**, plus a per-group "select all / none" toggle next to each group heading. Pure client-side JS against the existing checkboxes; the save handler is unchanged.
+- **Theme/plugin detection.** Any ability definition can carry a `requires` tag (`avada`, `gravityforms`, more later). `fdj_mcp_integration_detected()` in the main plugin file is the one place that knows how to check each tag; the settings screen, `register()`, and the health panel all filter through it. A group with nothing behind it does not render at all, rather than showing a checkbox that could never work. A saved toggle for a currently-hidden ability is preserved rather than wiped, so switching a theme back on restores it automatically. Adding the next integration (Elementor, Divi) means tagging its abilities and adding one case to that function, not touching the settings screen.
+
+Still open:
+
+- **"N new abilities added in this version" notice.** Saved toggles persist across updates, so a release that adds an ability leaves it off on existing installs with nothing on screen saying so. sophere.org sat on four of eight abilities for several releases before anyone noticed.
 
 ### Fusion Builder abilities (Avada)
 
@@ -169,10 +192,28 @@ Phase 2, for site-wide changes ("make every H1 74px") rather than one page at a 
 
 ### Other builders
 
-Elementor and Divi, once Fusion Builder is solid and this ships. Divi next.
+Elementor and Divi, once Fusion Builder is solid and this ships. Divi next. The `requires` tag and detector this version added is the piece that was missing to do this without a settings-screen change each time.
+
+### Gravity Forms abilities
+
+Built and shipping, active only on sites running Gravity Forms (nothing appears here, in the settings screen, or anywhere else on a site that doesn't):
+
+- `gravityforms/list-forms`, `get-form`, `list-entries`, `get-entry`, `list-feeds`, `list-addons` — all read. `get-form`'s `notifications` section is the direct answer to "who gets emailed and on what event"; its `confirmations` section shows whether a submission redirects to another page instead of just displaying a message. `list-feeds` surfaces every add-on feed on a form (a WooCommerce order feed, a payment gateway, anything else) by `addon_slug`, regardless of which specific add-on created it. Entry field values are labeled from the form's own field labels rather than left as raw numeric IDs.
+
+Deliberately not built:
+
+- **Resend notifications.** Replays a form's *currently configured* notification to matching entries at once, including old ones — a plausible explanation for one real incident already (a club treasurer suddenly receiving copies of months of old order notifications, PWDCNC, Aug 2026). If this is ever needed, it should be its own narrowly-scoped write ability: `dry_run` first, an explicit list of entry IDs rather than "all matching", and a hard cap. Not a shortcut bolted onto a read ability.
+- **Editing notifications/confirmations/feeds.** Same shape as the write abilities the page/post side already has; held back only because nothing has needed it yet.
+- **Entry export (CSV).** Gravity Forms already does this natively; low priority unless a workflow specifically needs Claude to generate one on demand.
+
+### Other integrations, watching for a real need rather than building ahead of one
+
+- **Contact Form 7.** Same shape of problem as Gravity Forms, for any client site that runs it instead. No current site is known to need this.
+- **Nav menus, users/roles.** Both technically reachable today through the generic post/option abilities in a roundabout way; a dedicated ability would only be worth the surface area once a real task asks for one. User/role management in particular is a bigger blast radius than content, and should stay out until asked for.
 
 ## Version history
 
+- `1.3.0` — Gravity Forms abilities (list-forms, get-form, list-entries, get-entry, list-feeds, list-addons), read-only, active only when Gravity Forms is present. Settings screen groups abilities by the theme/plugin they require, hides a group entirely when it is not active, and preserves a hidden group's saved toggles rather than wiping them. Added select-all and per-group select-all/none. Added `fdj/list-media` and `fdj/get-media`, closing the read-side gap next to the existing write-only `fdj/upload-media`.
 - `1.0.1` — health panel no longer reports "working natively" when another mu-plugin is actually supplying `PHP_AUTH_USER`; it now detects duplicates and says so
 - `1.0.0` — self-contained release: auth shim, admin setup screen with credential generation, health panel, audit log, per-ability toggles, writes off by default
 - `0.2.0` — fixed ability visibility (`show_in_rest` + `mcp.public` set explicitly)
