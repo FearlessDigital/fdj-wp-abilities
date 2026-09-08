@@ -4,7 +4,7 @@ Tags: mcp, ai, claude, abilities, rest-api
 Requires at least: 6.9
 Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: 1.3.2
+Stable tag: 1.4.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -48,6 +48,15 @@ On WordPress 6.9 and 7.0 an ability must set `meta.show_in_rest` and `meta.mcp.p
 Check the Basic auth row in the health panel. Some hosts pass the Authorization header but never populate PHP_AUTH_USER, which is the only thing core reads. The bundled shim handles that case.
 
 == Changelog ==
+
+= 1.4.0 =
+* New: fdj/set-option-value. fdj/replace-in-option can only rewrite a string that is already stored, which is no use on a fresh site where Avada's fusion_options holds a single key and every global setting has to be created rather than found. Sets a value at a path, creating missing keys, with the same safe-prefix allowlist, an expect_current concurrency guard, and dry_run.
+* New: fdj/set-core-setting. A hardcoded allowlist of core settings (site title, tagline, static front page and posts page, permalinks, timezone, date/time formats, posts per page, search engine visibility, site icon) that sit outside the theme/widget option prefixes. Setting a static front page had no route through this plugin at all. Deliberately a fixed list rather than a prefix rule, since these live in the same table as every credential a plugin has ever stashed in wp_options.
+* New: fdj/update-post-meta and fdj/set-post-terms. Page builders keep per-page settings in meta rather than post_content, and type their reusable parts with a private taxonomy, so a page can render wrong while every shortcode in it is already correct. Core's own bookkeeping keys (_wp_*, transients, edit locks) are refused; _wp_page_template and _wp_attachment_image_alt are allowed back in because they are legitimately a builder's business.
+* New: fdj/manage-menu. Creates a menu, sets its items from a flat list with a "parent" field for dropdowns, and assigns it to a theme location. Menus are terms with ordered posts hanging off them, so nothing else in this plugin could reach them: a correctly built header still rendered with no navigation. Every item is validated before anything is written, so a bad item at position five cannot leave the menu half rebuilt. An unregistered location slug is refused rather than silently ignored.
+* New: fdj/upload-media-data. fdj/upload-media can only sideload a publicly reachable URL, which does not help at the start of a build, where the approved photography is on the builder's machine or inside a design file and has never been published anywhere.
+* New: fdj/get-theme-info. Active theme and parent, registered nav menu locations with whatever menu is currently assigned, registered sidebars, and the detected builder. Menu location slugs and sidebar IDs are theme-specific, and guessing one wastes a write.
+* New: fdj/avada-reset-caches, active only on Avada. Avada compiles Theme Options and shortcode style attributes into cached CSS server-side, and a plain post/option write does not trigger the regeneration that saving in wp-admin does. The symptom is a style change that saves correctly and reports success while the live page keeps rendering the old value, which reads as a failed write and sends you looking for a bug that is not there. Probes each of Avada's cache resets and reports which were actually available rather than assuming.
 
 = 1.3.2 =
 * New: fdj/get-post-meta. WooCommerce's own native abilities (woocommerce/products-query, product-update) expose only a fixed catalog field set with no custom-fields escape hatch (confirmed: additionalProperties is false on both their input and output schemas), so there was no way to see something a plugin bolted on as product meta, e.g. a "Gravity Forms Product Add-Ons for WooCommerce"-style link between a product and a form. Not restricted to a safe-prefix allowlist the way fdj/get-option is, since post meta is essentially never where a real secret lives; gated on the same can_edit_post check as everything else that touches one specific post.

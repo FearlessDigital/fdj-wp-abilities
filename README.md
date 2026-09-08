@@ -47,6 +47,25 @@ No SFTP, no file editing, no config files.
 | `fdj/list-media` | Search/list media library attachments by title, caption, MIME type | Read | Off |
 | `fdj/get-media` | One attachment by ID, with every registered image size and its own URL/dimensions | Read | Off |
 | `fdj/get-post-meta` | Every custom field on one post/page/product — the WooCommerce native abilities have no custom-fields escape hatch | Read | Off |
+| `fdj/update-post-meta` | Write or delete custom fields on one post — builders keep per-page layout here, not in `post_content` | Write | Off |
+| `fdj/set-post-terms` | Assign taxonomy terms, including the private taxonomies builders use to type their reusable parts | Write | Off |
+
+### Site and theme configuration
+
+Enough to stand a site up from nothing, rather than only edit one that already exists.
+
+| Ability ID | What it does | Type | Default |
+|---|---|---|---|
+| `fdj/get-theme-info` | Active theme, registered nav menu locations and sidebars, detected builder | Read | Off |
+| `fdj/list-options` | Find option names matching a term, within the safe-prefix allowlist | Read | Off |
+| `fdj/get-option` | Read one option by exact name, same allowlist | Read | Off |
+| `fdj/replace-in-option` | Find and replace a literal string in one option field | Write | Off |
+| `fdj/set-option-value` | Set a value at a path inside an option, **creating missing keys** | Write | Off |
+| `fdj/set-core-setting` | One of a fixed list of core settings: static front page, site title, permalinks, timezone | Write | Off |
+| `fdj/manage-menu` | Create a nav menu, set its items, assign it to a theme location | Write | Off |
+| `fdj/upload-media` | Sideload a publicly reachable URL into the media library | Write | Off |
+| `fdj/upload-media-data` | Create an attachment from base64 content, for files not published anywhere | Write | Off |
+| `fdj/delete-post` | Trash a post/page; `force` for permanent delete | Write | Off |
 
 Every ability checks WordPress capabilities (`edit_post`, `edit_posts`, `create_posts`) through its `permission_callback`, so access is bounded by whichever user authenticates the connection. There is no bypass of core capability checks. Writes ship disabled so a freshly activated site can read and nothing more until someone decides otherwise.
 
@@ -181,15 +200,14 @@ Built and shipping:
 - `fdj/upload-media` — write. Sideloads a URL into the media library.
 - `fdj/delete-post` — write. Trashes a post/page; `force` for permanent delete.
 
-Still needed:
-
-- `fdj/update-post-meta` — Avada sometimes stores per-page layout overrides in post meta, not `post_content`. Not yet proven necessary against a real page; add when one turns up.
+- `fdj/update-post-meta` — write. Shipped in 1.4.0. The case that proved it necessary: a from-scratch Avada build, where a Layout Section is only recognised as a header because of its `fusion_tb_category` term and a page's background colour lives in `pyre_*` meta, so a page can look wrong while every shortcode in it is already correct.
+- `fdj/set-post-terms` — write. Shipped in 1.4.0, for that same taxonomy.
+- `fdj/avada-reset-caches` — write. Shipped in 1.4.0. Avada compiles Theme Options and shortcode style attributes into cached CSS server-side, and a write made through these abilities does not trigger the regeneration that saving in wp-admin does.
 
 Phase 2, for site-wide changes ("make every H1 74px") rather than one page at a time:
 
-- `fdj/get-theme-options` — read Avada's global Theme Options.
-- `fdj/update-theme-options` — write.
-- A site-wide version of `list-fusion-builder-elements`, to find every element with a literal override on a given property before a global change silently gets masked by them.
+- Reading and writing Avada's global Theme Options is covered as of 1.4.0, but by the generic `fdj/get-option` / `fdj/set-option-value` pair against `fusion_options` rather than by Avada-specific abilities. Avada's option names are stable and self-describing, and a generic path-addressed writer does not need updating every time Avada adds a field, so the specific `get-theme-options`/`update-theme-options` pair is no longer planned.
+- Still open: a site-wide version of `list-fusion-builder-elements`, to find every element with a literal override on a given property before a global change silently gets masked by them.
 
 ### Other builders
 
@@ -214,6 +232,7 @@ Deliberately not built:
 
 ## Version history
 
+- `1.4.0` — eight abilities for building a site from nothing rather than editing one that exists: `fdj/set-option-value` (the counterpart to `replace-in-option`, which can only rewrite a string already present — on a fresh site Avada's `fusion_options` holds one key, so nearly every global setting has to be created), `fdj/set-core-setting` (fixed allowlist; setting a static front page had no other route), `fdj/update-post-meta`, `fdj/set-post-terms`, `fdj/manage-menu` (menus are terms with ordered posts hanging off them, so nothing else here could reach them), `fdj/upload-media-data` (base64, for photography that has never been published to a URL), `fdj/get-theme-info` (menu location slugs and sidebar IDs are theme-specific; guessing one wastes a write), and `fdj/avada-reset-caches`.
 - `1.3.2` — fdj/get-post-meta, for reading custom/plugin fields on a post, page, or WooCommerce product. woocommerce/products-query and product-update are both hard-capped to a fixed catalog field set (`additionalProperties: false`) with no way to see something like a product-to-form link a plugin stored as post meta.
 - `1.3.1` — fixed gravityforms/* abilities returning Permission denied for an administrator on any site where Gravity Forms' own granular capabilities were never seeded onto a role (common on older installs); both permission checks now fall back to manage_options
 - `1.3.0` — Gravity Forms abilities (list-forms, get-form, list-entries, get-entry, list-feeds, list-addons), read-only, active only when Gravity Forms is present. Settings screen groups abilities by the theme/plugin they require, hides a group entirely when it is not active, and preserves a hidden group's saved toggles rather than wiping them. Added select-all and per-group select-all/none. Added `fdj/list-media` and `fdj/get-media`, closing the read-side gap next to the existing write-only `fdj/upload-media`.

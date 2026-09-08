@@ -908,6 +908,392 @@ class FDJ_MCP_Abilities {
 				'execute_callback'    => array( __CLASS__, 'execute_replace_in_option' ),
 				'permission_callback' => array( __CLASS__, 'can_manage_options' ),
 			),
+
+			'fdj/get-theme-info' => array(
+				'is_write'            => false,
+				'label'               => 'Get Theme Info',
+				'description'         => 'Read the active theme and the extension points a build needs to target: parent/child theme names and versions, every registered nav menu location with the menu currently assigned to it, every registered sidebar, and which page builder is active. On a from-scratch build this is the first call to make, because menu location slugs and sidebar IDs are theme-specific and guessing them wastes a write.',
+				'category'            => 'site',
+				'annotations'         => array(
+					'readonly'    => true,
+					'destructive' => false,
+					'idempotent'  => true,
+				),
+				'input_schema'        => array(
+					'type'       => 'object',
+					'properties' => array(),
+				),
+				'output_schema'       => array(
+					'type'       => 'object',
+					'properties' => array(
+						'stylesheet'     => array( 'type' => 'string' ),
+						'template'       => array( 'type' => 'string' ),
+						'name'           => array( 'type' => 'string' ),
+						'version'        => array( 'type' => 'string' ),
+						'is_child_theme' => array( 'type' => 'boolean' ),
+						'parent'         => array( 'type' => 'string' ),
+						'menu_locations' => array( 'type' => 'array' ),
+						'sidebars'       => array( 'type' => 'array' ),
+						'builders'       => array( 'type' => 'array' ),
+					),
+				),
+				'execute_callback'    => array( __CLASS__, 'execute_get_theme_info' ),
+				'permission_callback' => array( __CLASS__, 'can_edit_theme_options' ),
+			),
+
+			'fdj/set-option-value' => array(
+				'is_write'            => true,
+				'label'               => 'Set a Value Inside a Site Option',
+				'description'         => 'Write one value at a given path inside an allowlisted option (widget_*, sidebars_widgets, fusion_options, theme_mods_*, avada_*), creating any missing keys along the way. This is the companion to fdj/replace-in-option, which can only rewrite a string that is already there: on a fresh site Avada Theme Options is an almost empty array, so nearly every global setting has to be created rather than found and replaced. Pass an empty path to replace the whole option. Use expect_current to refuse the write if the value is not what you last read. Run with dry_run first.',
+				'category'            => 'site',
+				'annotations'         => array(
+					'readonly'    => false,
+					'destructive' => true,
+					'idempotent'  => true,
+				),
+				'input_schema'        => array(
+					'type'       => 'object',
+					'properties' => array(
+						'option_name'     => array(
+							'type'        => 'string',
+							'description' => 'Exact option_name from wp_options.',
+						),
+						'path'            => array(
+							'type'        => 'array',
+							'items'       => array( 'type' => 'string' ),
+							'description' => 'Keys navigating into the option to the value being set, e.g. ["primary_color"] for one Avada Theme Options field. Missing keys are created. An empty array replaces the entire option value.',
+						),
+						'value'           => array(
+							'description' => 'The value to write. Any JSON type: string, number, boolean, array or object. Objects and arrays are stored as PHP arrays, which is how WordPress stores nested option data.',
+						),
+						'expect_current'  => array(
+							'description' => 'Optional concurrency guard. If given, the write is refused unless the value currently at that path is identical. Pass null to assert the key does not exist yet.',
+						),
+						'create_missing'  => array(
+							'type'        => 'boolean',
+							'description' => 'Create intermediate keys that do not exist. Defaults to true. Set false to refuse rather than create, when you expect the path to already be there.',
+							'default'     => true,
+						),
+						'create_option'   => array(
+							'type'        => 'boolean',
+							'description' => 'Create the option itself if no such option row exists. Defaults to false, so a typo in option_name fails loudly instead of quietly creating a second, wrong option.',
+							'default'     => false,
+						),
+						'dry_run'         => array(
+							'type'        => 'boolean',
+							'description' => 'Preview the change without saving. Defaults to false.',
+							'default'     => false,
+						),
+					),
+					'required'   => array( 'option_name', 'path', 'value' ),
+				),
+				'output_schema'       => array(
+					'type'       => 'object',
+					'properties' => array(
+						'option_name' => array( 'type' => 'string' ),
+						'path'        => array( 'type' => 'array' ),
+						'created'     => array( 'type' => 'boolean' ),
+						'dry_run'     => array( 'type' => 'boolean' ),
+						'before'      => array( 'description' => 'Value previously at that path, or null if it did not exist.' ),
+						'after'       => array( 'description' => 'Value now at that path.' ),
+					),
+				),
+				'execute_callback'    => array( __CLASS__, 'execute_set_option_value' ),
+				'permission_callback' => array( __CLASS__, 'can_manage_options' ),
+			),
+
+			'fdj/set-core-setting' => array(
+				'is_write'            => true,
+				'label'               => 'Set a Core Site Setting',
+				'description'         => 'Write one of a small fixed list of core WordPress settings that live outside the theme/widget option prefixes: site title and tagline, the static front page and posts page, permalink structure, date/time formats, timezone, posts per page, and search engine visibility. The list is a hardcoded allowlist, not a prefix rule, so this ability can never reach an unrelated option. Setting a static front page is the one step a from-scratch build cannot do any other way.',
+				'category'            => 'site',
+				'annotations'         => array(
+					'readonly'    => false,
+					'destructive' => true,
+					'idempotent'  => true,
+				),
+				'input_schema'        => array(
+					'type'       => 'object',
+					'properties' => array(
+						'setting' => array(
+							'type'        => 'string',
+							'enum'        => array( 'blogname', 'blogdescription', 'show_on_front', 'page_on_front', 'page_for_posts', 'posts_per_page', 'date_format', 'time_format', 'start_of_week', 'timezone_string', 'permalink_structure', 'blog_public', 'site_icon' ),
+							'description' => 'Which setting to write.',
+						),
+						'value'   => array(
+							'description' => 'The new value. show_on_front takes "page" or "posts". page_on_front, page_for_posts and site_icon take a post/attachment ID. blog_public takes 1 (visible) or 0 (discourage indexing).',
+						),
+						'dry_run' => array(
+							'type'        => 'boolean',
+							'description' => 'Preview the change without saving. Defaults to false.',
+							'default'     => false,
+						),
+					),
+					'required'   => array( 'setting', 'value' ),
+				),
+				'output_schema'       => array(
+					'type'       => 'object',
+					'properties' => array(
+						'setting' => array( 'type' => 'string' ),
+						'before'  => array(),
+						'after'   => array(),
+						'dry_run' => array( 'type' => 'boolean' ),
+					),
+				),
+				'execute_callback'    => array( __CLASS__, 'execute_set_core_setting' ),
+				'permission_callback' => array( __CLASS__, 'can_manage_options' ),
+			),
+
+			'fdj/update-post-meta' => array(
+				'is_write'            => true,
+				'label'               => 'Update Post Meta',
+				'description'         => 'Write or delete custom fields on one post, page, or layout section. This is the write counterpart to fdj/get-post-meta. Page builders keep per-page settings here rather than in post_content: Avada stores page background colour, header transparency and title-bar visibility as pyre_* meta, and a Layout\'s slot assignments as its own meta, so a page can look wrong on a site where every shortcode is already correct. Also the only way to set a page template (_wp_page_template) or a featured image (_thumbnail_id). Pass null as a value to delete that key. Run with dry_run first.',
+				'category'            => 'content',
+				'annotations'         => array(
+					'readonly'    => false,
+					'destructive' => true,
+					'idempotent'  => true,
+				),
+				'input_schema'        => array(
+					'type'       => 'object',
+					'properties' => array(
+						'post_id'           => array(
+							'type'        => 'integer',
+							'description' => 'The post, page, or custom post type ID to write meta on.',
+						),
+						'meta'              => array(
+							'type'                 => 'object',
+							'description'          => 'Map of meta_key to value. A null value deletes that key. Values may be strings, numbers, booleans, arrays or objects; arrays and objects are stored serialized, exactly as WordPress does natively.',
+							'additionalProperties' => true,
+						),
+						'expected_modified' => $expected_modified,
+						'dry_run'           => array(
+							'type'        => 'boolean',
+							'description' => 'Preview the change without saving. Defaults to false.',
+							'default'     => false,
+						),
+					),
+					'required'   => array( 'post_id', 'meta' ),
+				),
+				'output_schema'       => array(
+					'type'       => 'object',
+					'properties' => array(
+						'post_id' => array( 'type' => 'integer' ),
+						'changes' => array( 'type' => 'array' ),
+						'dry_run' => array( 'type' => 'boolean' ),
+					),
+				),
+				'execute_callback'    => array( __CLASS__, 'execute_update_post_meta' ),
+				'permission_callback' => array( __CLASS__, 'can_edit_post' ),
+			),
+
+			'fdj/set-post-terms' => array(
+				'is_write'            => true,
+				'label'               => 'Set Post Terms',
+				'description'         => 'Assign taxonomy terms to a post. Needed beyond ordinary categories and tags because builders type their reusable parts with a private taxonomy: an Avada Layout Section is only recognised as a header or a footer because of its fusion_tb_category term, so a section created with the right content but no term is invisible to the theme. Replaces the post\'s terms in that taxonomy unless append is true.',
+				'category'            => 'content',
+				'annotations'         => array(
+					'readonly'    => false,
+					'destructive' => true,
+					'idempotent'  => true,
+				),
+				'input_schema'        => array(
+					'type'       => 'object',
+					'properties' => array(
+						'post_id'        => array(
+							'type'        => 'integer',
+							'description' => 'The post ID to assign terms to.',
+						),
+						'taxonomy'       => array(
+							'type'        => 'string',
+							'description' => 'Taxonomy name, e.g. "category", "post_tag", or "fusion_tb_category".',
+						),
+						'terms'          => array(
+							'type'        => 'array',
+							'items'       => array( 'type' => 'string' ),
+							'description' => 'Term slugs or names to assign. An empty array clears the post\'s terms in this taxonomy.',
+						),
+						'append'         => array(
+							'type'        => 'boolean',
+							'description' => 'Add to the post\'s existing terms instead of replacing them. Defaults to false.',
+							'default'     => false,
+						),
+						'create_missing' => array(
+							'type'        => 'boolean',
+							'description' => 'Create any term that does not exist yet. Defaults to false, so a typo fails loudly instead of silently creating a near-duplicate term.',
+							'default'     => false,
+						),
+					),
+					'required'   => array( 'post_id', 'taxonomy', 'terms' ),
+				),
+				'output_schema'       => array(
+					'type'       => 'object',
+					'properties' => array(
+						'post_id'  => array( 'type' => 'integer' ),
+						'taxonomy' => array( 'type' => 'string' ),
+						'before'   => array( 'type' => 'array' ),
+						'after'    => array( 'type' => 'array' ),
+						'created'  => array( 'type' => 'array' ),
+					),
+				),
+				'execute_callback'    => array( __CLASS__, 'execute_set_post_terms' ),
+				'permission_callback' => array( __CLASS__, 'can_edit_post' ),
+			),
+
+			'fdj/upload-media-data' => array(
+				'is_write'            => true,
+				'label'               => 'Upload Media from Data',
+				'description'         => 'Create a media library attachment from base64-encoded file content. fdj/upload-media can only sideload a publicly reachable URL, which is no help for the usual case at the start of a build, where the approved photography sits on the builder\'s own machine or inside a design file and has never been published anywhere. Send web-optimised files: this travels through the request body, so resize and compress before encoding rather than sending camera originals.',
+				'category'            => 'site',
+				'annotations'         => array(
+					'readonly'    => false,
+					'destructive' => false,
+					'idempotent'  => false,
+				),
+				'input_schema'        => array(
+					'type'       => 'object',
+					'properties' => array(
+						'filename' => array(
+							'type'        => 'string',
+							'description' => 'Filename including extension, e.g. "hero-arranging-peonies.jpg". The extension decides the MIME type and must be one WordPress allows for upload.',
+						),
+						'content'  => array(
+							'type'        => 'string',
+							'description' => 'Base64-encoded file content. Plain base64, not a data: URI.',
+						),
+						'title'    => array(
+							'type'        => 'string',
+							'description' => 'Media library title. Defaults to the filename without its extension.',
+						),
+						'alt_text' => array(
+							'type'        => 'string',
+							'description' => 'Alt text for the image. Worth setting here rather than later; it is the accessible name of every image on the page.',
+						),
+						'caption'  => array(
+							'type'        => 'string',
+							'description' => 'Attachment caption.',
+						),
+					),
+					'required'   => array( 'filename', 'content' ),
+				),
+				'output_schema'       => array(
+					'type'       => 'object',
+					'properties' => array(
+						'attachment_id' => array( 'type' => 'integer' ),
+						'url'           => array( 'type' => 'string' ),
+						'width'         => array( 'type' => 'integer' ),
+						'height'        => array( 'type' => 'integer' ),
+						'bytes'         => array( 'type' => 'integer' ),
+					),
+				),
+				'execute_callback'    => array( __CLASS__, 'execute_upload_media_data' ),
+				'permission_callback' => array( __CLASS__, 'can_upload_files' ),
+			),
+
+			'fdj/manage-menu' => array(
+				'is_write'            => true,
+				'label'               => 'Manage a Navigation Menu',
+				'description'         => 'Create a nav menu, set its items, and assign it to a theme location, in one call. Nothing else in this plugin can reach menus: they are terms with ordered posts hanging off them, not options or post content, so a header built entirely correctly still renders with no navigation until this runs. Items are given as a flat list; use "parent" to make a dropdown, pointing at the 1-based position of the parent item in the same list. Setting items replaces every existing item in the menu. Run with dry_run first.',
+				'category'            => 'site',
+				'annotations'         => array(
+					'readonly'    => false,
+					'destructive' => true,
+					'idempotent'  => true,
+				),
+				'input_schema'        => array(
+					'type'       => 'object',
+					'properties' => array(
+						'menu_name'         => array(
+							'type'        => 'string',
+							'description' => 'Menu name, e.g. "Main Navigation". Matched by name or slug.',
+						),
+						'create_if_missing' => array(
+							'type'        => 'boolean',
+							'description' => 'Create the menu if no menu of that name exists. Defaults to true.',
+							'default'     => true,
+						),
+						'items'             => array(
+							'type'        => 'array',
+							'description' => 'The menu\'s items, in order. Omit to leave existing items untouched and only assign a location. An empty array empties the menu.',
+							'items'       => array(
+								'type'       => 'object',
+								'properties' => array(
+									'title'   => array(
+										'type'        => 'string',
+										'description' => 'Link label as it appears in the menu.',
+									),
+									'page_id' => array(
+										'type'        => 'integer',
+										'description' => 'ID of a page or post to link to. Preferred over url: the link then follows the page if its slug ever changes.',
+									),
+									'url'     => array(
+										'type'        => 'string',
+										'description' => 'Explicit URL, for external links or anchors. Ignored when page_id is given.',
+									),
+									'parent'  => array(
+										'type'        => 'integer',
+										'description' => '1-based position, within this same items array, of the item this one sits under. Omit for a top-level item. The parent must appear earlier in the array than its child.',
+									),
+									'target'  => array(
+										'type'        => 'string',
+										'description' => 'Set to "_blank" to open in a new tab.',
+									),
+								),
+								'required'   => array( 'title' ),
+							),
+						),
+						'location'          => array(
+							'type'        => 'string',
+							'description' => 'Theme location slug to assign this menu to, e.g. "main_navigation". Get the valid slugs from fdj/get-theme-info rather than guessing; an unregistered slug is refused.',
+						),
+						'dry_run'           => array(
+							'type'        => 'boolean',
+							'description' => 'Preview without saving. Defaults to false.',
+							'default'     => false,
+						),
+					),
+					'required'   => array( 'menu_name' ),
+				),
+				'output_schema'       => array(
+					'type'       => 'object',
+					'properties' => array(
+						'menu_id'       => array( 'type' => 'integer' ),
+						'menu_name'     => array( 'type' => 'string' ),
+						'created_menu'  => array( 'type' => 'boolean' ),
+						'items'         => array( 'type' => 'array' ),
+						'location'      => array( 'type' => 'string' ),
+						'dry_run'       => array( 'type' => 'boolean' ),
+					),
+				),
+				'execute_callback'    => array( __CLASS__, 'execute_manage_menu' ),
+				'permission_callback' => array( __CLASS__, 'can_edit_theme_options' ),
+			),
+
+			'fdj/avada-reset-caches' => array(
+				'is_write'            => true,
+				'requires'            => 'avada',
+				'label'               => 'Reset Avada Caches',
+				'description'         => 'Regenerate Avada\'s compiled CSS and clear its caches. Avada compiles shortcode style attributes and Theme Options into its own cached CSS server-side, and a write made through these abilities does not trigger that regeneration the way saving in wp-admin does. The visible symptom is a style change that saves correctly and reports success while the live page keeps rendering the old value, which reads as a failed write and sends you looking for a bug that is not there. Run this after any styling or Theme Options write, then verify against the live page.',
+				'category'            => 'site',
+				'annotations'         => array(
+					'readonly'    => false,
+					'destructive' => false,
+					'idempotent'  => true,
+				),
+				'input_schema'        => array(
+					'type'       => 'object',
+					'properties' => array(),
+				),
+				'output_schema'       => array(
+					'type'       => 'object',
+					'properties' => array(
+						'ran'     => array( 'type' => 'array' ),
+						'skipped' => array( 'type' => 'array' ),
+					),
+				),
+				'execute_callback'    => array( __CLASS__, 'execute_avada_reset_caches' ),
+				'permission_callback' => array( __CLASS__, 'can_edit_theme_options' ),
+			),
 		);
 	}
 
@@ -1042,6 +1428,19 @@ class FDJ_MCP_Abilities {
 	 */
 	public static function can_manage_options() {
 		return current_user_can( 'manage_options' );
+	}
+
+	/**
+	 * Can the current user change theme-level configuration?
+	 *
+	 * Menus, menu locations and theme mods are gated on edit_theme_options
+	 * rather than manage_options, so an Editor-with-appearance-access role
+	 * is not locked out of work it can already do in wp-admin.
+	 *
+	 * @return bool
+	 */
+	public static function can_edit_theme_options() {
+		return current_user_can( 'edit_theme_options' );
 	}
 
 	/* -----------------------------------------------------------------
@@ -2248,4 +2647,841 @@ class FDJ_MCP_Abilities {
 			'after'       => $new_field,
 		);
 	}
+
+	/**
+	 * Read the active theme and the extension points a build needs to target.
+	 *
+	 * @return array
+	 */
+	public static function execute_get_theme_info() {
+		$theme = wp_get_theme();
+
+		$assigned  = get_theme_mod( 'nav_menu_locations', array() );
+		$locations = array();
+
+		foreach ( get_registered_nav_menus() as $slug => $label ) {
+			$menu_id = isset( $assigned[ $slug ] ) ? (int) $assigned[ $slug ] : 0;
+			$menu    = $menu_id ? wp_get_nav_menu_object( $menu_id ) : false;
+
+			$locations[] = array(
+				'slug'         => (string) $slug,
+				'label'        => (string) $label,
+				'menu_id'      => $menu_id,
+				'menu_name'    => $menu ? $menu->name : '',
+			);
+		}
+
+		$sidebars = array();
+
+		if ( ! empty( $GLOBALS['wp_registered_sidebars'] ) ) {
+			foreach ( $GLOBALS['wp_registered_sidebars'] as $id => $sidebar ) {
+				$sidebars[] = array(
+					'id'   => (string) $id,
+					'name' => isset( $sidebar['name'] ) ? (string) $sidebar['name'] : '',
+				);
+			}
+		}
+
+		$builders = array();
+
+		if ( defined( 'FUSION_BUILDER_VERSION' ) ) {
+			$builders[] = 'fusion-builder ' . FUSION_BUILDER_VERSION;
+		}
+
+		if ( defined( 'AVADA_VERSION' ) ) {
+			$builders[] = 'avada ' . AVADA_VERSION;
+		}
+
+		if ( defined( 'ELEMENTOR_VERSION' ) ) {
+			$builders[] = 'elementor ' . ELEMENTOR_VERSION;
+		}
+
+		$parent = $theme->parent();
+
+		return array(
+			'stylesheet'     => (string) get_stylesheet(),
+			'template'       => (string) get_template(),
+			'name'           => (string) $theme->get( 'Name' ),
+			'version'        => (string) $theme->get( 'Version' ),
+			'is_child_theme' => (bool) $parent,
+			'parent'         => $parent ? (string) $parent->get( 'Name' ) : '',
+			'menu_locations' => $locations,
+			'sidebars'       => $sidebars,
+			'builders'       => $builders,
+		);
+	}
+
+	/**
+	 * Set one value at a path inside an allowlisted option.
+	 *
+	 * @param array $input Ability input.
+	 * @return array|WP_Error
+	 */
+	public static function execute_set_option_value( $input = array() ) {
+		$name = isset( $input['option_name'] ) ? (string) $input['option_name'] : '';
+
+		if ( '' === $name ) {
+			return new WP_Error( 'fdj_empty_option_name', 'option_name is required.' );
+		}
+
+		if ( ! self::is_safe_option_name( $name ) ) {
+			return new WP_Error(
+				'fdj_option_not_allowed',
+				sprintf(
+					'Refused: "%s" is outside the allowed prefixes (%s).',
+					$name,
+					implode( ', ', self::SAFE_OPTION_PREFIXES )
+				)
+			);
+		}
+
+		$sentinel = new stdClass();
+		$stored   = get_option( $name, $sentinel );
+		$existed  = ( $stored !== $sentinel );
+
+		if ( ! $existed ) {
+			if ( empty( $input['create_option'] ) ) {
+				return new WP_Error(
+					'fdj_option_not_found',
+					sprintf( 'No option named "%s" exists. Pass create_option to create it, but check the name first.', $name )
+				);
+			}
+
+			$stored = array();
+		}
+
+		$path           = isset( $input['path'] ) && is_array( $input['path'] ) ? array_values( $input['path'] ) : array();
+		$value          = self::normalize_option_value( isset( $input['value'] ) ? $input['value'] : null );
+		$create_missing = ! isset( $input['create_missing'] ) || ! empty( $input['create_missing'] );
+
+		// An empty path replaces the whole option.
+		if ( empty( $path ) ) {
+			$before = $existed ? $stored : null;
+			$after  = $value;
+		} else {
+			if ( $existed && ! is_array( $stored ) ) {
+				return new WP_Error(
+					'fdj_option_not_an_array',
+					sprintf( 'Option "%s" holds a scalar, so there is no path to write into. Pass an empty path to replace it outright.', $name )
+				);
+			}
+
+			$new      = is_array( $stored ) ? $stored : array();
+			$last_key = array_pop( $path );
+			$cursor   = &$new;
+
+			foreach ( $path as $key ) {
+				if ( ! array_key_exists( $key, $cursor ) || ! is_array( $cursor[ $key ] ) ) {
+					if ( ! $create_missing && ! array_key_exists( $key, $cursor ) ) {
+						unset( $cursor );
+
+						return new WP_Error(
+							'fdj_path_not_found',
+							sprintf( 'Key "%s" does not exist in option "%s" and create_missing is false.', $key, $name )
+						);
+					}
+
+					if ( array_key_exists( $key, $cursor ) && ! is_array( $cursor[ $key ] ) ) {
+						unset( $cursor );
+
+						return new WP_Error(
+							'fdj_path_blocked',
+							sprintf( 'Key "%s" in option "%s" holds a scalar, so the path cannot continue through it.', $key, $name )
+						);
+					}
+
+					$cursor[ $key ] = array();
+				}
+
+				$cursor = &$cursor[ $key ];
+			}
+
+			if ( ! array_key_exists( $last_key, $cursor ) && ! $create_missing ) {
+				unset( $cursor );
+
+				return new WP_Error(
+					'fdj_path_not_found',
+					sprintf( 'Key "%s" does not exist in option "%s" and create_missing is false.', $last_key, $name )
+				);
+			}
+
+			$before = array_key_exists( $last_key, $cursor ) ? $cursor[ $last_key ] : null;
+
+			if ( array_key_exists( 'expect_current', $input ) ) {
+				$expected = self::normalize_option_value( $input['expect_current'] );
+
+				if ( $before !== $expected ) {
+					unset( $cursor );
+
+					return new WP_Error(
+						'fdj_unexpected_current',
+						sprintf(
+							'Refused: expect_current did not match the value at that path in "%s". Re-read with fdj/get-option and redo the write against what is actually there.',
+							$name
+						)
+					);
+				}
+			}
+
+			$cursor[ $last_key ] = $value;
+			unset( $cursor );
+
+			$after  = $value;
+			$stored = $new;
+			$path[] = $last_key;
+		}
+
+		$full_path = empty( $input['path'] ) || ! is_array( $input['path'] ) ? array() : array_values( $input['path'] );
+
+		if ( ! empty( $input['dry_run'] ) ) {
+			return array(
+				'option_name' => $name,
+				'path'        => $full_path,
+				'created'     => ! $existed,
+				'dry_run'     => true,
+				'before'      => $before,
+				'after'       => $after,
+			);
+		}
+
+		$to_save = empty( $full_path ) ? $value : $stored;
+		$saved   = update_option( $name, $to_save );
+
+		// update_option() returns false both on failure and when the value is
+		// unchanged, so only a fresh read that still disagrees is a real failure.
+		if ( ! $saved && get_option( $name ) !== $to_save ) {
+			return new WP_Error( 'fdj_save_failed', 'WordPress declined to save the updated option.' );
+		}
+
+		return array(
+			'option_name' => $name,
+			'path'        => $full_path,
+			'created'     => ! $existed,
+			'dry_run'     => false,
+			'before'      => $before,
+			'after'       => $after,
+		);
+	}
+
+	/**
+	 * Convert a decoded JSON value into the shape WordPress stores.
+	 *
+	 * JSON objects arrive as stdClass over REST; option and meta data is
+	 * expected to be nested arrays, so a stored object would round-trip
+	 * differently to the same data saved through wp-admin.
+	 *
+	 * @param mixed $value Decoded value.
+	 * @return mixed
+	 */
+	private static function normalize_option_value( $value ) {
+		if ( $value instanceof stdClass ) {
+			$value = (array) $value;
+		}
+
+		if ( is_array( $value ) ) {
+			foreach ( $value as $key => $item ) {
+				$value[ $key ] = self::normalize_option_value( $item );
+			}
+		}
+
+		return $value;
+	}
+
+	/**
+	 * Core settings this plugin is allowed to write, and how to sanitize each.
+	 *
+	 * Deliberately a fixed list rather than a prefix rule: these live in the
+	 * same wp_options table as every credential a plugin has ever stashed there.
+	 *
+	 * @return array<string, string>
+	 */
+	private static function core_setting_types() {
+		return array(
+			'blogname'            => 'text',
+			'blogdescription'     => 'text',
+			'show_on_front'       => 'front',
+			'page_on_front'       => 'post_id',
+			'page_for_posts'      => 'post_id',
+			'posts_per_page'      => 'int',
+			'date_format'         => 'text',
+			'time_format'         => 'text',
+			'start_of_week'       => 'int',
+			'timezone_string'     => 'text',
+			'permalink_structure' => 'text',
+			'blog_public'         => 'int',
+			'site_icon'           => 'post_id',
+		);
+	}
+
+	/**
+	 * Write one allowlisted core setting.
+	 *
+	 * @param array $input Ability input.
+	 * @return array|WP_Error
+	 */
+	public static function execute_set_core_setting( $input = array() ) {
+		$setting = isset( $input['setting'] ) ? (string) $input['setting'] : '';
+		$types   = self::core_setting_types();
+
+		if ( ! isset( $types[ $setting ] ) ) {
+			return new WP_Error(
+				'fdj_setting_not_allowed',
+				sprintf( 'Refused: "%s" is not one of the allowed core settings (%s).', $setting, implode( ', ', array_keys( $types ) ) )
+			);
+		}
+
+		$raw = isset( $input['value'] ) ? $input['value'] : '';
+
+		switch ( $types[ $setting ] ) {
+			case 'front':
+				$value = ( 'posts' === $raw ) ? 'posts' : 'page';
+
+				if ( ! in_array( $raw, array( 'page', 'posts' ), true ) ) {
+					return new WP_Error( 'fdj_invalid_value', 'show_on_front must be "page" or "posts".' );
+				}
+				break;
+
+			case 'post_id':
+				$value = (int) $raw;
+
+				if ( $value > 0 && ! get_post( $value ) ) {
+					return new WP_Error( 'fdj_post_not_found', sprintf( 'No post exists with ID %d.', $value ) );
+				}
+				break;
+
+			case 'int':
+				$value = (int) $raw;
+				break;
+
+			default:
+				$value = sanitize_text_field( (string) $raw );
+				break;
+		}
+
+		$before = get_option( $setting );
+
+		if ( ! empty( $input['dry_run'] ) ) {
+			return array(
+				'setting' => $setting,
+				'before'  => $before,
+				'after'   => $value,
+				'dry_run' => true,
+			);
+		}
+
+		$saved = update_option( $setting, $value );
+
+		if ( ! $saved && get_option( $setting ) != $value ) { // phpcs:ignore WordPress.PHP.StrictComparisons.LooseComparison -- options round-trip ints as numeric strings.
+			return new WP_Error( 'fdj_save_failed', sprintf( 'WordPress declined to save "%s".', $setting ) );
+		}
+
+		// A permalink change is inert until the rewrite rules are rebuilt.
+		if ( 'permalink_structure' === $setting ) {
+			flush_rewrite_rules( false );
+		}
+
+		return array(
+			'setting' => $setting,
+			'before'  => $before,
+			'after'   => $value,
+			'dry_run' => false,
+		);
+	}
+
+	/**
+	 * Whether a meta key may be written through this plugin.
+	 *
+	 * Post meta is where builders keep per-page layout, so a blanket ban on
+	 * underscore-prefixed keys would block the exact keys this exists to reach.
+	 * Core's own internal bookkeeping is excluded instead, with the two _wp_
+	 * keys that are legitimately a builder's business allowed back in.
+	 *
+	 * @param string $key Meta key.
+	 * @return bool
+	 */
+	private static function is_writable_meta_key( $key ) {
+		$allowed_wp = array( '_wp_page_template', '_wp_attachment_image_alt' );
+
+		if ( in_array( $key, $allowed_wp, true ) ) {
+			return true;
+		}
+
+		$blocked_prefixes = array( '_wp_', '_transient', '_site_transient', '_edit_lock', '_edit_last', '_oembed_' );
+
+		foreach ( $blocked_prefixes as $prefix ) {
+			if ( 0 === strpos( $key, $prefix ) ) {
+				return false;
+			}
+		}
+
+		return '' !== $key;
+	}
+
+	/**
+	 * Write or delete custom fields on one post.
+	 *
+	 * @param array $input Ability input.
+	 * @return array|WP_Error
+	 */
+	public static function execute_update_post_meta( $input = array() ) {
+		$post = get_post( isset( $input['post_id'] ) ? (int) $input['post_id'] : 0 );
+
+		if ( ! $post ) {
+			return new WP_Error( 'fdj_post_not_found', 'No post found with that ID.' );
+		}
+
+		$stale = self::check_not_stale( $post, $input );
+
+		if ( is_wp_error( $stale ) ) {
+			return $stale;
+		}
+
+		$meta = isset( $input['meta'] ) ? $input['meta'] : null;
+
+		if ( $meta instanceof stdClass ) {
+			$meta = (array) $meta;
+		}
+
+		if ( ! is_array( $meta ) || empty( $meta ) ) {
+			return new WP_Error( 'fdj_empty_meta', 'meta must be a non-empty object of meta_key => value pairs.' );
+		}
+
+		foreach ( array_keys( $meta ) as $key ) {
+			if ( ! self::is_writable_meta_key( (string) $key ) ) {
+				return new WP_Error(
+					'fdj_meta_key_not_allowed',
+					sprintf( 'Refused: "%s" is WordPress internal bookkeeping and is not writable through this ability. Nothing was written.', $key )
+				);
+			}
+		}
+
+		$dry_run = ! empty( $input['dry_run'] );
+		$changes = array();
+
+		foreach ( $meta as $key => $value ) {
+			$key      = (string) $key;
+			$existing = get_post_meta( $post->ID, $key, true );
+			$value    = self::normalize_option_value( $value );
+			$action   = ( null === $value ) ? 'delete' : 'set';
+
+			$changes[] = array(
+				'meta_key' => $key, // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_key
+				'action'   => $action,
+				'before'   => ( '' === $existing ) ? null : $existing,
+				'after'    => $value,
+			);
+
+			if ( $dry_run ) {
+				continue;
+			}
+
+			if ( 'delete' === $action ) {
+				delete_post_meta( $post->ID, $key );
+			} else {
+				update_post_meta( $post->ID, $key, $value );
+			}
+		}
+
+		return array(
+			'post_id' => (int) $post->ID,
+			'changes' => $changes,
+			'dry_run' => $dry_run,
+		);
+	}
+
+	/**
+	 * Assign taxonomy terms to a post.
+	 *
+	 * @param array $input Ability input.
+	 * @return array|WP_Error
+	 */
+	public static function execute_set_post_terms( $input = array() ) {
+		$post = get_post( isset( $input['post_id'] ) ? (int) $input['post_id'] : 0 );
+
+		if ( ! $post ) {
+			return new WP_Error( 'fdj_post_not_found', 'No post found with that ID.' );
+		}
+
+		$taxonomy = isset( $input['taxonomy'] ) ? (string) $input['taxonomy'] : '';
+
+		if ( ! taxonomy_exists( $taxonomy ) ) {
+			return new WP_Error(
+				'fdj_taxonomy_not_found',
+				sprintf( 'No taxonomy named "%s" is registered on this site.', $taxonomy )
+			);
+		}
+
+		if ( ! is_object_in_taxonomy( $post->post_type, $taxonomy ) ) {
+			return new WP_Error(
+				'fdj_taxonomy_wrong_type',
+				sprintf( 'Taxonomy "%s" does not apply to post type "%s".', $taxonomy, $post->post_type )
+			);
+		}
+
+		$requested = isset( $input['terms'] ) && is_array( $input['terms'] ) ? array_values( $input['terms'] ) : array();
+
+		$before = wp_get_object_terms( $post->ID, $taxonomy, array( 'fields' => 'slugs' ) );
+		$before = is_wp_error( $before ) ? array() : $before;
+
+		$create_missing = ! empty( $input['create_missing'] );
+		$term_ids       = array();
+		$created        = array();
+
+		foreach ( $requested as $name ) {
+			$name = (string) $name;
+			$term = get_term_by( 'slug', $name, $taxonomy );
+
+			if ( ! $term ) {
+				$term = get_term_by( 'name', $name, $taxonomy );
+			}
+
+			if ( ! $term ) {
+				if ( ! $create_missing ) {
+					return new WP_Error(
+						'fdj_term_not_found',
+						sprintf( 'No term "%s" exists in taxonomy "%s", and create_missing is false. Nothing was written.', $name, $taxonomy )
+					);
+				}
+
+				$new = wp_insert_term( $name, $taxonomy );
+
+				if ( is_wp_error( $new ) ) {
+					return $new;
+				}
+
+				$term_ids[] = (int) $new['term_id'];
+				$created[]  = $name;
+				continue;
+			}
+
+			$term_ids[] = (int) $term->term_id;
+		}
+
+		$result = wp_set_object_terms( $post->ID, $term_ids, $taxonomy, ! empty( $input['append'] ) );
+
+		if ( is_wp_error( $result ) ) {
+			return $result;
+		}
+
+		$after = wp_get_object_terms( $post->ID, $taxonomy, array( 'fields' => 'slugs' ) );
+
+		return array(
+			'post_id'  => (int) $post->ID,
+			'taxonomy' => $taxonomy,
+			'before'   => array_values( $before ),
+			'after'    => is_wp_error( $after ) ? array() : array_values( $after ),
+			'created'  => $created,
+		);
+	}
+
+	/**
+	 * Create a media library attachment from base64 file content.
+	 *
+	 * @param array $input Ability input.
+	 * @return array|WP_Error
+	 */
+	public static function execute_upload_media_data( $input = array() ) {
+		$filename = isset( $input['filename'] ) ? sanitize_file_name( (string) $input['filename'] ) : '';
+		$b64      = isset( $input['content'] ) ? (string) $input['content'] : '';
+
+		if ( '' === $filename ) {
+			return new WP_Error( 'fdj_missing_filename', 'filename is required, including its extension.' );
+		}
+
+		if ( '' === $b64 ) {
+			return new WP_Error( 'fdj_missing_content', 'content is required: the base64-encoded file.' );
+		}
+
+		// Tolerate a data: URI prefix and stray whitespace from transport.
+		$b64 = preg_replace( '#^data:[^;]*;base64,#', '', trim( $b64 ) );
+		$bin = base64_decode( $b64, true ); // phpcs:ignore WordPress.PHP.DiscouragedPHPFunctions.obfuscation_base64_decode -- this is a file transport, not obfuscation.
+
+		if ( false === $bin || '' === $bin ) {
+			return new WP_Error( 'fdj_bad_base64', 'content is not valid base64.' );
+		}
+
+		$check = wp_check_filetype( $filename );
+
+		if ( empty( $check['type'] ) ) {
+			return new WP_Error(
+				'fdj_disallowed_filetype',
+				sprintf( 'WordPress does not allow uploads with the extension on "%s".', $filename )
+			);
+		}
+
+		require_once ABSPATH . 'wp-admin/includes/image.php';
+
+		$upload = wp_upload_bits( $filename, null, $bin );
+
+		if ( ! empty( $upload['error'] ) ) {
+			return new WP_Error( 'fdj_upload_failed', (string) $upload['error'] );
+		}
+
+		$title = isset( $input['title'] ) && '' !== $input['title']
+			? sanitize_text_field( (string) $input['title'] )
+			: preg_replace( '/\.[^.]+$/', '', $filename );
+
+		$attachment_id = wp_insert_attachment(
+			array(
+				'post_mime_type' => $check['type'],
+				'post_title'     => $title,
+				'post_excerpt'   => isset( $input['caption'] ) ? sanitize_text_field( (string) $input['caption'] ) : '',
+				'post_status'    => 'inherit',
+			),
+			$upload['file']
+		);
+
+		if ( is_wp_error( $attachment_id ) ) {
+			@unlink( $upload['file'] ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+			return $attachment_id;
+		}
+
+		wp_update_attachment_metadata(
+			$attachment_id,
+			wp_generate_attachment_metadata( $attachment_id, $upload['file'] )
+		);
+
+		if ( ! empty( $input['alt_text'] ) ) {
+			update_post_meta( $attachment_id, '_wp_attachment_image_alt', sanitize_text_field( (string) $input['alt_text'] ) );
+		}
+
+		$meta = wp_get_attachment_metadata( $attachment_id );
+
+		return array(
+			'attachment_id' => (int) $attachment_id,
+			'url'           => (string) wp_get_attachment_url( $attachment_id ),
+			'width'         => isset( $meta['width'] ) ? (int) $meta['width'] : 0,
+			'height'        => isset( $meta['height'] ) ? (int) $meta['height'] : 0,
+			'bytes'         => strlen( $bin ),
+		);
+	}
+
+	/**
+	 * Create or update a nav menu, its items, and its theme location.
+	 *
+	 * @param array $input Ability input.
+	 * @return array|WP_Error
+	 */
+	public static function execute_manage_menu( $input = array() ) {
+		$menu_name = isset( $input['menu_name'] ) ? sanitize_text_field( (string) $input['menu_name'] ) : '';
+
+		if ( '' === $menu_name ) {
+			return new WP_Error( 'fdj_missing_menu_name', 'menu_name is required.' );
+		}
+
+		$location = isset( $input['location'] ) ? (string) $input['location'] : '';
+
+		if ( '' !== $location ) {
+			$registered = get_registered_nav_menus();
+
+			if ( ! isset( $registered[ $location ] ) ) {
+				return new WP_Error(
+					'fdj_location_not_registered',
+					sprintf(
+						'Refused: "%s" is not a nav menu location registered by this theme (%s). Nothing was written.',
+						$location,
+						implode( ', ', array_keys( $registered ) )
+					)
+				);
+			}
+		}
+
+		$dry_run = ! empty( $input['dry_run'] );
+		$menu    = wp_get_nav_menu_object( $menu_name );
+		$created = false;
+
+		if ( ! $menu ) {
+			if ( isset( $input['create_if_missing'] ) && empty( $input['create_if_missing'] ) ) {
+				return new WP_Error( 'fdj_menu_not_found', sprintf( 'No menu named "%s" exists and create_if_missing is false.', $menu_name ) );
+			}
+
+			$created = true;
+
+			if ( ! $dry_run ) {
+				$menu_id = wp_create_nav_menu( $menu_name );
+
+				if ( is_wp_error( $menu_id ) ) {
+					return $menu_id;
+				}
+
+				$menu = wp_get_nav_menu_object( (int) $menu_id );
+			}
+		}
+
+		$menu_id = $menu ? (int) $menu->term_id : 0;
+		$items   = isset( $input['items'] ) && is_array( $input['items'] ) ? array_values( $input['items'] ) : null;
+		$report  = array();
+
+		if ( null !== $items ) {
+
+			// Validate every item before touching anything, so a bad item at
+			// position 5 does not leave the menu half rebuilt.
+			foreach ( $items as $i => $item ) {
+				$item = (array) $item;
+
+				if ( empty( $item['title'] ) ) {
+					return new WP_Error( 'fdj_item_missing_title', sprintf( 'Item %d has no title.', $i + 1 ) );
+				}
+
+				if ( empty( $item['page_id'] ) && empty( $item['url'] ) ) {
+					return new WP_Error(
+						'fdj_item_missing_target',
+						sprintf( 'Item %d ("%s") needs either page_id or url.', $i + 1, $item['title'] )
+					);
+				}
+
+				if ( ! empty( $item['page_id'] ) && ! get_post( (int) $item['page_id'] ) ) {
+					return new WP_Error(
+						'fdj_item_page_not_found',
+						sprintf( 'Item %d ("%s") points at page_id %d, which does not exist.', $i + 1, $item['title'], (int) $item['page_id'] )
+					);
+				}
+
+				if ( ! empty( $item['parent'] ) ) {
+					$parent = (int) $item['parent'];
+
+					if ( $parent < 1 || $parent > count( $items ) ) {
+						return new WP_Error(
+							'fdj_item_bad_parent',
+							sprintf( 'Item %d ("%s") names parent %d, which is outside the items array.', $i + 1, $item['title'], $parent )
+						);
+					}
+
+					if ( $parent >= $i + 1 ) {
+						return new WP_Error(
+							'fdj_item_forward_parent',
+							sprintf( 'Item %d ("%s") names parent %d, which is not earlier in the array. A parent must be listed before its children.', $i + 1, $item['title'], $parent )
+						);
+					}
+				}
+			}
+
+			if ( ! $dry_run && $menu_id ) {
+				foreach ( (array) wp_get_nav_menu_items( $menu_id, array( 'post_status' => 'any' ) ) as $existing ) {
+					wp_delete_post( (int) $existing->ID, true );
+				}
+			}
+
+			$db_ids = array();
+
+			foreach ( $items as $i => $item ) {
+				$item      = (array) $item;
+				$parent_no = ! empty( $item['parent'] ) ? (int) $item['parent'] : 0;
+				$parent_id = ( $parent_no && isset( $db_ids[ $parent_no - 1 ] ) ) ? $db_ids[ $parent_no - 1 ] : 0;
+
+				$args = array(
+					'menu-item-title'     => sanitize_text_field( (string) $item['title'] ),
+					'menu-item-status'    => 'publish',
+					'menu-item-parent-id' => $parent_id,
+					'menu-item-position'  => $i + 1,
+				);
+
+				if ( ! empty( $item['target'] ) ) {
+					$args['menu-item-target'] = ( '_blank' === $item['target'] ) ? '_blank' : '';
+				}
+
+				if ( ! empty( $item['page_id'] ) ) {
+					$page                        = get_post( (int) $item['page_id'] );
+					$args['menu-item-type']      = 'post_type';
+					$args['menu-item-object']    = $page->post_type;
+					$args['menu-item-object-id'] = (int) $page->ID;
+				} else {
+					$args['menu-item-type'] = 'custom';
+					$args['menu-item-url']  = esc_url_raw( (string) $item['url'] );
+				}
+
+				if ( ! $dry_run ) {
+					$item_id = wp_update_nav_menu_item( $menu_id, 0, $args );
+
+					if ( is_wp_error( $item_id ) ) {
+						return $item_id;
+					}
+
+					$db_ids[ $i ] = (int) $item_id;
+				} else {
+					$db_ids[ $i ] = 0;
+				}
+
+				$report[] = array(
+					'position' => $i + 1,
+					'title'    => $args['menu-item-title'],
+					'type'     => $args['menu-item-type'],
+					'target'   => ! empty( $item['page_id'] ) ? (int) $item['page_id'] : (string) $item['url'],
+					'parent'   => $parent_no,
+				);
+			}
+		}
+
+		if ( '' !== $location && ! $dry_run && $menu_id ) {
+			$assigned              = get_theme_mod( 'nav_menu_locations', array() );
+			$assigned[ $location ] = $menu_id;
+			set_theme_mod( 'nav_menu_locations', $assigned );
+		}
+
+		return array(
+			'menu_id'      => $menu_id,
+			'menu_name'    => $menu_name,
+			'created_menu' => $created,
+			'items'        => $report,
+			'location'     => $location,
+			'dry_run'      => $dry_run,
+		);
+	}
+
+	/**
+	 * Regenerate Avada's compiled CSS and clear its caches.
+	 *
+	 * Avada exposes several cache resets across versions and no single one of
+	 * them is guaranteed present, so each is probed and the outcome reported
+	 * rather than assumed. A silent no-op here would recreate exactly the bug
+	 * this ability exists to fix.
+	 *
+	 * @return array
+	 */
+	public static function execute_avada_reset_caches() {
+		$ran     = array();
+		$skipped = array();
+
+		if ( function_exists( 'fusion_reset_all_caches' ) ) {
+			fusion_reset_all_caches();
+			$ran[] = 'fusion_reset_all_caches()';
+		} else {
+			$skipped[] = 'fusion_reset_all_caches() not defined';
+		}
+
+		if ( class_exists( 'Fusion_Dynamic_CSS' ) && method_exists( 'Fusion_Dynamic_CSS', 'reset_all_caches' ) ) {
+			Fusion_Dynamic_CSS::reset_all_caches();
+			$ran[] = 'Fusion_Dynamic_CSS::reset_all_caches()';
+		} else {
+			$skipped[] = 'Fusion_Dynamic_CSS::reset_all_caches() not available';
+		}
+
+		if ( class_exists( 'Fusion_Cache' ) ) {
+			$cache = new Fusion_Cache();
+
+			if ( method_exists( $cache, 'reset_all_caches' ) ) {
+				$cache->reset_all_caches();
+				$ran[] = 'Fusion_Cache::reset_all_caches()';
+			}
+		} else {
+			$skipped[] = 'Fusion_Cache not available';
+		}
+
+		// Avada keys its compiled CSS off this counter; bumping it invalidates
+		// every cached stylesheet even when the resets above are unavailable.
+		$bumped = (int) get_option( 'avada_dynamic_css_posts', 0 );
+		update_option( 'fusion_dynamic_css_time', time() );
+		$ran[] = 'fusion_dynamic_css_time bumped (was ' . $bumped . ' cached posts)';
+
+		if ( function_exists( 'wp_cache_flush' ) ) {
+			wp_cache_flush();
+			$ran[] = 'wp_cache_flush()';
+		}
+
+		return array(
+			'ran'     => $ran,
+			'skipped' => $skipped,
+		);
+	}
+
 }
