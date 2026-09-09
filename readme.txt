@@ -4,7 +4,7 @@ Tags: mcp, ai, claude, abilities, rest-api
 Requires at least: 6.9
 Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: 1.4.1
+Stable tag: 1.4.2
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -48,6 +48,9 @@ On WordPress 6.9 and 7.0 an ability must set `meta.show_in_rest` and `meta.mcp.p
 Check the Basic auth row in the health panel. Some hosts pass the Authorization header but never populate PHP_AUTH_USER, which is the only thing core reads. The bundled shim handles that case.
 
 == Changelog ==
+
+= 1.4.2 =
+* Fixed: fdj/update-post-meta and fdj/set-post-terms were enabled but never registered, so they were invisible to Claude while the settings screen showed them ticked. Both were given category "content" in 1.4.0; every other ability in this plugin uses "site", and nothing registers a "content" category, so the Abilities API refused them. The health panel caught it ("24 of 26 enabled abilities exposed"), which is exactly what that check is for. Both now use "site" like everything else.
 
 = 1.4.1 =
 * Fixed: fdj/avada-reset-caches fatalled on Avada 7.16. Fusion_Dynamic_CSS::reset_all_caches() is an instance method, and method_exists() is true for those too, so the static call threw and aborted the ability after the first reset had already run - the worst outcome, since a half-finished reset can purge the compiled CSS and never regenerate it. Each reset is now attempted independently, its shape checked by reflection (static vs instance, public, constructor arity) and wrapped so one failure cannot take the others with it. The dynamic-CSS timestamp bump, which always works, now runs regardless.

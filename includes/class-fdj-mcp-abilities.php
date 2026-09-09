@@ -1048,7 +1048,7 @@ class FDJ_MCP_Abilities {
 				'is_write'            => true,
 				'label'               => 'Update Post Meta',
 				'description'         => 'Write or delete custom fields on one post, page, or layout section. This is the write counterpart to fdj/get-post-meta. Page builders keep per-page settings here rather than in post_content: Avada stores page background colour, header transparency and title-bar visibility as pyre_* meta, and a Layout\'s slot assignments as its own meta, so a page can look wrong on a site where every shortcode is already correct. Also the only way to set a page template (_wp_page_template) or a featured image (_thumbnail_id). Pass null as a value to delete that key. Run with dry_run first.',
-				'category'            => 'content',
+				'category'            => 'site',
 				'annotations'         => array(
 					'readonly'    => false,
 					'destructive' => true,
@@ -1091,7 +1091,7 @@ class FDJ_MCP_Abilities {
 				'is_write'            => true,
 				'label'               => 'Set Post Terms',
 				'description'         => 'Assign taxonomy terms to a post. Needed beyond ordinary categories and tags because builders type their reusable parts with a private taxonomy: an Avada Layout Section is only recognised as a header or a footer because of its fusion_tb_category term, so a section created with the right content but no term is invisible to the theme. Replaces the post\'s terms in that taxonomy unless append is true.',
-				'category'            => 'content',
+				'category'            => 'site',
 				'annotations'         => array(
 					'readonly'    => false,
 					'destructive' => true,
