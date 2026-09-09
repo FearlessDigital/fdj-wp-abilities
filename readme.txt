@@ -4,7 +4,7 @@ Tags: mcp, ai, claude, abilities, rest-api
 Requires at least: 6.9
 Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: 1.4.2
+Stable tag: 1.5.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -48,6 +48,12 @@ On WordPress 6.9 and 7.0 an ability must set `meta.show_in_rest` and `meta.mcp.p
 Check the Basic auth row in the health panel. Some hosts pass the Authorization header but never populate PHP_AUTH_USER, which is the only thing core reads. The bundled shim handles that case.
 
 == Changelog ==
+
+= 1.5.0 =
+* New: fdj/list-post-types. Lists every registered post type with its exact name, whether it is public, the taxonomies on it and its post counts. Added because pointing an ability at a post type name that does not exist returned an empty list identical to a real type holding nothing, and that false negative was read as proof the thing was absent. On an Avada build it is what tells you the real name of the type holding Layouts instead of guessing at it.
+* New: fdj/get-post-terms. The read half of fdj/set-post-terms, which until now wrote terms with nothing able to read them back. Returns term_id and slug, not just names, because a theme matches on the slug while a human types the name, and when those disagree nothing renders while the names look perfectly correct.
+* New: fdj/list-terms. Lists the terms in a taxonomy with slug, parent and count. hide_empty defaults to false, since a term created during a build is legitimately empty until content is assigned to it and hiding it makes a term that exists look like one that does not.
+* Fixed: fdj/list-posts answered a query for an unregistered post type with an empty array, which is byte-identical to a real post type with no posts. It now refuses the guess and names the ability that lists the types that do exist. This one cost a real debugging session: an empty result was taken as proof that no Avada Layout existed, when it only meant the post type was not what had been assumed.
 
 = 1.4.2 =
 * Fixed: fdj/update-post-meta and fdj/set-post-terms were enabled but never registered, so they were invisible to Claude while the settings screen showed them ticked. Both were given category "content" in 1.4.0; every other ability in this plugin uses "site", and nothing registers a "content" category, so the Abilities API refused them. The health panel caught it ("24 of 26 enabled abilities exposed"), which is exactly what that check is for. Both now use "site" like everything else.

@@ -1140,6 +1140,135 @@ class FDJ_MCP_Abilities {
 				'permission_callback' => array( __CLASS__, 'can_edit_post' ),
 			),
 
+			'fdj/get-post-terms' => array(
+				'is_write'            => false,
+				'label'               => 'Get Post Terms',
+				'description'         => 'Read the taxonomy terms assigned to one post, with each term\'s exact term_id, name and slug. This is the missing read half of fdj/set-post-terms, which until now wrote terms blind: a page builder types its reusable parts with a private taxonomy, so when an Avada Layout Section is built correctly and still does not render, the term is the first thing to suspect and there was previously no way to look at it. Omit "taxonomy" to get every taxonomy that applies to the post.',
+				'category'            => 'site',
+				'annotations'         => array(
+					'readonly'    => true,
+					'destructive' => false,
+					'idempotent'  => true,
+				),
+				'input_schema'        => array(
+					'type'       => 'object',
+					'properties' => array(
+						'post_id'  => array(
+							'type'        => 'integer',
+							'description' => 'The post, page or layout section to read terms from.',
+						),
+						'taxonomy' => array(
+							'type'        => 'string',
+							'description' => 'Limit to one taxonomy, e.g. "fusion_tb_category". Omit to return every taxonomy registered for this post type.',
+						),
+					),
+					'required'   => array( 'post_id' ),
+				),
+				'output_schema'       => array(
+					'type'       => 'object',
+					'properties' => array(
+						'post_id'    => array( 'type' => 'integer' ),
+						'post_type'  => array( 'type' => 'string' ),
+						'taxonomies' => array( 'type' => 'object' ),
+					),
+				),
+				'execute_callback'    => array( __CLASS__, 'execute_get_post_terms' ),
+				'permission_callback' => array( __CLASS__, 'can_edit_posts' ),
+			),
+
+			'fdj/list-terms' => array(
+				'is_write'            => false,
+				'label'               => 'List Taxonomy Terms',
+				'description'         => 'List the terms in one taxonomy with their term_id, name, slug, parent and post count. Use it to confirm a slug before writing it, and to see the real shape of a term tree: WordPress derives a slug from a name and will silently suffix it when the slug is already taken, so the term you think you created as "footer" can actually be "footer-2" and match nothing. Also the way to enumerate portfolio or gallery filter categories before building an element that depends on them.',
+				'category'            => 'site',
+				'annotations'         => array(
+					'readonly'    => true,
+					'destructive' => false,
+					'idempotent'  => true,
+				),
+				'input_schema'        => array(
+					'type'       => 'object',
+					'properties' => array(
+						'taxonomy'   => array(
+							'type'        => 'string',
+							'description' => 'Taxonomy name, e.g. "category", "fusion_tb_category", "portfolio_category".',
+						),
+						'search'     => array(
+							'type'        => 'string',
+							'description' => 'Optional term name or slug fragment to filter by.',
+						),
+						'hide_empty' => array(
+							'type'        => 'boolean',
+							'description' => 'Skip terms with no posts. Defaults to false, because a term created for a build is legitimately empty until content is assigned to it.',
+							'default'     => false,
+						),
+						'per_page'   => array(
+							'type'        => 'integer',
+							'description' => 'Max terms to return. Capped at 200.',
+							'default'     => 100,
+						),
+					),
+					'required'   => array( 'taxonomy' ),
+				),
+				'output_schema'       => array(
+					'type'  => 'array',
+					'items' => array(
+						'type'       => 'object',
+						'properties' => array(
+							'term_id' => array( 'type' => 'integer' ),
+							'name'    => array( 'type' => 'string' ),
+							'slug'    => array( 'type' => 'string' ),
+							'parent'  => array( 'type' => 'integer' ),
+							'count'   => array( 'type' => 'integer' ),
+						),
+					),
+				),
+				'execute_callback'    => array( __CLASS__, 'execute_list_terms' ),
+				'permission_callback' => array( __CLASS__, 'can_edit_posts' ),
+			),
+
+			'fdj/list-post-types' => array(
+				'is_write'            => false,
+				'label'               => 'List Registered Post Types',
+				'description'         => 'List every post type registered on this site: its exact name, label, whether it is public or admin-only, which taxonomies apply to it, and how many posts it holds by status. Page builders keep their parts in private post types whose names cannot be guessed from the admin UI, and pointing another ability at a name that does not exist returns an empty list that is indistinguishable from a real type with no posts. That false negative is worth avoiding: it reads as proof that something is absent when it only means you spelled it wrong. Call this first whenever a post type name is an assumption rather than a fact.',
+				'category'            => 'site',
+				'annotations'         => array(
+					'readonly'    => true,
+					'destructive' => false,
+					'idempotent'  => true,
+				),
+				'input_schema'        => array(
+					'type'       => 'object',
+					'properties' => array(
+						'search'      => array(
+							'type'        => 'string',
+							'description' => 'Optional fragment matched against the post type name and label, e.g. "fusion" or "layout".',
+						),
+						'public_only' => array(
+							'type'        => 'boolean',
+							'description' => 'Return only public post types. Defaults to false, since the interesting ones on a builder site are private.',
+							'default'     => false,
+						),
+					),
+				),
+				'output_schema'       => array(
+					'type'  => 'array',
+					'items' => array(
+						'type'       => 'object',
+						'properties' => array(
+							'name'       => array( 'type' => 'string' ),
+							'label'      => array( 'type' => 'string' ),
+							'public'     => array( 'type' => 'boolean' ),
+							'show_ui'    => array( 'type' => 'boolean' ),
+							'taxonomies' => array( 'type' => 'array' ),
+							'counts'     => array( 'type' => 'object' ),
+						),
+					),
+				),
+				'execute_callback'    => array( __CLASS__, 'execute_list_post_types' ),
+				'permission_callback' => array( __CLASS__, 'can_edit_posts' ),
+			),
+
 			'fdj/upload-media-data' => array(
 				'is_write'            => true,
 				'label'               => 'Upload Media from Data',
@@ -1654,9 +1783,28 @@ class FDJ_MCP_Abilities {
 		$per_page = isset( $input['per_page'] ) ? (int) $input['per_page'] : 20;
 		$per_page = max( 1, min( 100, $per_page ) );
 
+		$post_type = isset( $input['post_type'] ) ? (string) $input['post_type'] : 'page';
+
+		/*
+		 * WP_Query answers a query for an unregistered post type with an empty
+		 * result set, which is byte-identical to a real post type that happens
+		 * to hold nothing. That is the worst kind of wrong answer: it looks like
+		 * evidence of absence. Refuse the guess instead, and point at the
+		 * ability that can list the names that actually exist.
+		 */
+		if ( ! post_type_exists( $post_type ) ) {
+			return new WP_Error(
+				'fdj_post_type_not_found',
+				sprintf(
+					'No post type named "%s" is registered on this site, so an empty result here would have meant nothing. Run fdj/list-post-types to see the names that do exist.',
+					$post_type
+				)
+			);
+		}
+
 		$query = new WP_Query(
 			array(
-				'post_type'      => isset( $input['post_type'] ) ? $input['post_type'] : 'page',
+				'post_type'      => $post_type,
 				'post_status'    => isset( $input['status'] ) ? $input['status'] : 'any',
 				's'              => isset( $input['search'] ) ? $input['search'] : '',
 				'posts_per_page' => $per_page,
@@ -3187,6 +3335,177 @@ class FDJ_MCP_Abilities {
 			'after'    => is_wp_error( $after ) ? array() : array_values( $after ),
 			'created'  => $created,
 		);
+	}
+
+	/**
+	 * Read the taxonomy terms on one post.
+	 *
+	 * The read half of execute_set_post_terms. Returns term_id and slug rather
+	 * than names alone, because the slug is what a theme matches on and the
+	 * name is what a human typed; when those two disagree, nothing renders and
+	 * the names look correct.
+	 *
+	 * @param array $input Ability input.
+	 * @return array|WP_Error
+	 */
+	public static function execute_get_post_terms( $input = array() ) {
+		$post = get_post( isset( $input['post_id'] ) ? (int) $input['post_id'] : 0 );
+
+		if ( ! $post ) {
+			return new WP_Error( 'fdj_post_not_found', 'No post found with that ID.' );
+		}
+
+		$requested = isset( $input['taxonomy'] ) ? (string) $input['taxonomy'] : '';
+
+		if ( '' !== $requested ) {
+			if ( ! taxonomy_exists( $requested ) ) {
+				return new WP_Error(
+					'fdj_taxonomy_not_found',
+					sprintf( 'No taxonomy named "%s" is registered on this site.', $requested )
+				);
+			}
+
+			$taxonomies = array( $requested );
+		} else {
+			$taxonomies = get_object_taxonomies( $post->post_type );
+		}
+
+		$out = array();
+
+		foreach ( $taxonomies as $taxonomy ) {
+			$terms = wp_get_object_terms( $post->ID, $taxonomy );
+
+			if ( is_wp_error( $terms ) ) {
+				continue;
+			}
+
+			$rows = array();
+
+			foreach ( $terms as $term ) {
+				$rows[] = array(
+					'term_id' => (int) $term->term_id,
+					'name'    => $term->name,
+					'slug'    => $term->slug,
+					'parent'  => (int) $term->parent,
+					'count'   => (int) $term->count,
+				);
+			}
+
+			$out[ $taxonomy ] = $rows;
+		}
+
+		return array(
+			'post_id'    => $post->ID,
+			'post_type'  => $post->post_type,
+			'taxonomies' => $out,
+		);
+	}
+
+	/**
+	 * List the terms in one taxonomy.
+	 *
+	 * hide_empty defaults to false on purpose: a term created as part of a build
+	 * is legitimately empty until content is assigned to it, and hiding it makes
+	 * a term that exists look like a term that does not.
+	 *
+	 * @param array $input Ability input.
+	 * @return array|WP_Error
+	 */
+	public static function execute_list_terms( $input = array() ) {
+		$taxonomy = isset( $input['taxonomy'] ) ? (string) $input['taxonomy'] : '';
+
+		if ( ! taxonomy_exists( $taxonomy ) ) {
+			return new WP_Error(
+				'fdj_taxonomy_not_found',
+				sprintf( 'No taxonomy named "%s" is registered on this site.', $taxonomy )
+			);
+		}
+
+		$per_page = isset( $input['per_page'] ) ? (int) $input['per_page'] : 100;
+		$per_page = max( 1, min( 200, $per_page ) );
+
+		$args = array(
+			'taxonomy'   => $taxonomy,
+			'hide_empty' => ! empty( $input['hide_empty'] ),
+			'number'     => $per_page,
+		);
+
+		if ( isset( $input['search'] ) && '' !== $input['search'] ) {
+			$args['search'] = (string) $input['search'];
+		}
+
+		$terms = get_terms( $args );
+
+		if ( is_wp_error( $terms ) ) {
+			return $terms;
+		}
+
+		$results = array();
+
+		foreach ( $terms as $term ) {
+			$results[] = array(
+				'term_id'     => (int) $term->term_id,
+				'name'        => $term->name,
+				'slug'        => $term->slug,
+				'parent'      => (int) $term->parent,
+				'count'       => (int) $term->count,
+				'description' => $term->description,
+			);
+		}
+
+		return $results;
+	}
+
+	/**
+	 * List every registered post type.
+	 *
+	 * Exists so that "this post type does not exist" and "this post type is
+	 * empty" stop being the same answer. Includes private types, which is the
+	 * whole point on a page builder site: the parts worth reaching are the ones
+	 * with no admin list screen.
+	 *
+	 * @param array $input Ability input.
+	 * @return array
+	 */
+	public static function execute_list_post_types( $input = array() ) {
+		$search      = isset( $input['search'] ) ? strtolower( (string) $input['search'] ) : '';
+		$public_only = ! empty( $input['public_only'] );
+
+		$objects = get_post_types( array(), 'objects' );
+		$results = array();
+
+		foreach ( $objects as $name => $object ) {
+			if ( $public_only && empty( $object->public ) ) {
+				continue;
+			}
+
+			$label = isset( $object->labels->name ) ? (string) $object->labels->name : (string) $name;
+
+			if ( '' !== $search
+				&& false === strpos( strtolower( (string) $name ), $search )
+				&& false === strpos( strtolower( $label ), $search ) ) {
+				continue;
+			}
+
+			$counts = array();
+
+			foreach ( (array) wp_count_posts( $name ) as $status => $total ) {
+				if ( (int) $total > 0 ) {
+					$counts[ $status ] = (int) $total;
+				}
+			}
+
+			$results[] = array(
+				'name'       => (string) $name,
+				'label'      => $label,
+				'public'     => (bool) $object->public,
+				'show_ui'    => (bool) $object->show_ui,
+				'taxonomies' => array_values( get_object_taxonomies( $name ) ),
+				'counts'     => $counts,
+			);
+		}
+
+		return $results;
 	}
 
 	/**
