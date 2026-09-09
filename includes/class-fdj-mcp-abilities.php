@@ -2975,9 +2975,24 @@ class FDJ_MCP_Abilities {
 			return new WP_Error( 'fdj_save_failed', sprintf( 'WordPress declined to save "%s".', $setting ) );
 		}
 
-		// A permalink change is inert until the rewrite rules are rebuilt.
+		/*
+		 * A permalink change is inert until the rewrite rules are rebuilt, and
+		 * flushing alone is not enough: $wp_rewrite was constructed earlier in
+		 * this request from the OLD structure, so a plain flush regenerates
+		 * exactly the rules it already had. Confirmed on a real site, where the
+		 * option saved correctly and every post 404'd on its new URL until the
+		 * same call was run a second time. Hand the new structure to the
+		 * rewrite object first, then flush.
+		 */
 		if ( 'permalink_structure' === $setting ) {
-			flush_rewrite_rules( false );
+			global $wp_rewrite;
+
+			if ( $wp_rewrite instanceof WP_Rewrite ) {
+				$wp_rewrite->set_permalink_structure( $value );
+				$wp_rewrite->flush_rules( false );
+			} else {
+				flush_rewrite_rules( false );
+			}
 		}
 
 		return array(
@@ -3442,46 +3457,99 @@ class FDJ_MCP_Abilities {
 		$ran     = array();
 		$skipped = array();
 
-		if ( function_exists( 'fusion_reset_all_caches' ) ) {
-			fusion_reset_all_caches();
-			$ran[] = 'fusion_reset_all_caches()';
-		} else {
-			$skipped[] = 'fusion_reset_all_caches() not defined';
-		}
+		/*
+		 * Each reset is attempted independently, and defensively.
+		 *
+		 * Avada moves these between plain functions, static methods and
+		 * instance methods across versions, and method_exists() is true for a
+		 * non-static method too, so a naive static call fatals. Confirmed on
+		 * Avada 7.16, where Fusion_Dynamic_CSS::reset_all_caches() threw and
+		 * took the whole ability with it after the first reset had already
+		 * run. A half-finished cache reset is worse than none, because it can
+		 * leave the compiled CSS purged and never regenerated.
+		 */
+		$targets = array(
+			'fusion_reset_all_caches()'              => 'fusion_reset_all_caches',
+			'Fusion_Dynamic_CSS::reset_all_caches()' => array( 'Fusion_Dynamic_CSS', 'reset_all_caches' ),
+			'Fusion_Cache::reset_all_caches()'       => array( 'Fusion_Cache', 'reset_all_caches' ),
+		);
 
-		if ( class_exists( 'Fusion_Dynamic_CSS' ) && method_exists( 'Fusion_Dynamic_CSS', 'reset_all_caches' ) ) {
-			Fusion_Dynamic_CSS::reset_all_caches();
-			$ran[] = 'Fusion_Dynamic_CSS::reset_all_caches()';
-		} else {
-			$skipped[] = 'Fusion_Dynamic_CSS::reset_all_caches() not available';
-		}
+		foreach ( $targets as $label => $target ) {
+			$outcome = self::call_defensively( $target );
 
-		if ( class_exists( 'Fusion_Cache' ) ) {
-			$cache = new Fusion_Cache();
-
-			if ( method_exists( $cache, 'reset_all_caches' ) ) {
-				$cache->reset_all_caches();
-				$ran[] = 'Fusion_Cache::reset_all_caches()';
+			if ( true === $outcome ) {
+				$ran[] = $label;
+			} else {
+				$skipped[] = $label . ' - ' . $outcome;
 			}
-		} else {
-			$skipped[] = 'Fusion_Cache not available';
 		}
 
-		// Avada keys its compiled CSS off this counter; bumping it invalidates
-		// every cached stylesheet even when the resets above are unavailable.
-		$bumped = (int) get_option( 'avada_dynamic_css_posts', 0 );
+		/*
+		 * Avada keys its compiled stylesheet off this timestamp, so bumping it
+		 * invalidates every cached sheet even when none of the resets above
+		 * were reachable. This is the one step that always works.
+		 */
 		update_option( 'fusion_dynamic_css_time', time() );
-		$ran[] = 'fusion_dynamic_css_time bumped (was ' . $bumped . ' cached posts)';
+		$ran[] = 'fusion_dynamic_css_time bumped';
 
-		if ( function_exists( 'wp_cache_flush' ) ) {
-			wp_cache_flush();
-			$ran[] = 'wp_cache_flush()';
-		}
+		wp_cache_flush();
+		$ran[] = 'wp_cache_flush()';
 
 		return array(
 			'ran'     => $ran,
 			'skipped' => $skipped,
 		);
+	}
+
+	/**
+	 * Call a function or class method without assuming its shape.
+	 *
+	 * @param string|array $target Function name, or array( class, method ).
+	 * @return true|string True on success, otherwise why it was skipped.
+	 */
+	private static function call_defensively( $target ) {
+		try {
+			if ( is_string( $target ) ) {
+				if ( ! function_exists( $target ) ) {
+					return 'not defined';
+				}
+
+				$target();
+
+				return true;
+			}
+
+			list( $class, $method ) = $target;
+
+			if ( ! class_exists( $class ) || ! method_exists( $class, $method ) ) {
+				return 'not available';
+			}
+
+			$reflected = new ReflectionMethod( $class, $method );
+
+			if ( ! $reflected->isPublic() ) {
+				return 'not public';
+			}
+
+			if ( $reflected->isStatic() ) {
+				$class::$method();
+
+				return true;
+			}
+
+			$constructor = ( new ReflectionClass( $class ) )->getConstructor();
+
+			if ( $constructor && $constructor->getNumberOfRequiredParameters() > 0 ) {
+				return 'instance method needing constructor arguments';
+			}
+
+			$instance = new $class();
+			$instance->$method();
+
+			return true;
+		} catch ( Throwable $e ) {
+			return 'threw: ' . $e->getMessage();
+		}
 	}
 
 }

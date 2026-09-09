@@ -4,7 +4,7 @@ Tags: mcp, ai, claude, abilities, rest-api
 Requires at least: 6.9
 Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: 1.4.0
+Stable tag: 1.4.1
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -48,6 +48,10 @@ On WordPress 6.9 and 7.0 an ability must set `meta.show_in_rest` and `meta.mcp.p
 Check the Basic auth row in the health panel. Some hosts pass the Authorization header but never populate PHP_AUTH_USER, which is the only thing core reads. The bundled shim handles that case.
 
 == Changelog ==
+
+= 1.4.1 =
+* Fixed: fdj/avada-reset-caches fatalled on Avada 7.16. Fusion_Dynamic_CSS::reset_all_caches() is an instance method, and method_exists() is true for those too, so the static call threw and aborted the ability after the first reset had already run - the worst outcome, since a half-finished reset can purge the compiled CSS and never regenerate it. Each reset is now attempted independently, its shape checked by reflection (static vs instance, public, constructor arity) and wrapped so one failure cannot take the others with it. The dynamic-CSS timestamp bump, which always works, now runs regardless.
+* Fixed: fdj/set-core-setting saved permalink_structure but left every post 404ing on its new URL. $wp_rewrite is constructed from the OLD structure earlier in the request, so flushing alone regenerated exactly the rules it already had. The new structure is now handed to the rewrite object before flushing. Confirmed against a real site, where the same call had to be run twice to take effect.
 
 = 1.4.0 =
 * New: fdj/set-option-value. fdj/replace-in-option can only rewrite a string that is already stored, which is no use on a fresh site where Avada's fusion_options holds a single key and every global setting has to be created rather than found. Sets a value at a path, creating missing keys, with the same safe-prefix allowlist, an expect_current concurrency guard, and dry_run.
