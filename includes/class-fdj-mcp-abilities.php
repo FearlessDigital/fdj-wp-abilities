@@ -1319,6 +1319,55 @@ class FDJ_MCP_Abilities {
 				'permission_callback' => array( __CLASS__, 'can_upload_files' ),
 			),
 
+			'fdj/update-media' => array(
+				'is_write'            => true,
+				'label'               => 'Update Media Details',
+				'description'         => 'Set the caption, alt text, title, or description on one or many media library attachments in a single call. Nothing else could write these: attachments are posts, but the caption lives in post_excerpt, which no other ability reaches, and alt text lives in _wp_attachment_image_alt. Galleries and lightboxes (Avada\'s included) read the caption from the attachment, not from the page, so this is how a caption actually appears on the site. Only the fields you pass change; pass an empty string to clear one. Up to 200 attachments per call. Run with dry_run first.',
+				'category'            => 'site',
+				'annotations'         => array(
+					'readonly'    => false,
+					'destructive' => false,
+					'idempotent'  => true,
+				),
+				'input_schema'        => array(
+					'type'       => 'object',
+					'properties' => array(
+						'items'   => array(
+							'type'        => 'array',
+							'description' => 'One entry per attachment. Each needs attachment_id plus at least one of caption, alt_text, title, description.',
+							'items'       => array(
+								'type'       => 'object',
+								'properties' => array(
+									'attachment_id' => array( 'type' => 'integer' ),
+									'caption'       => array( 'type' => 'string' ),
+									'alt_text'      => array( 'type' => 'string' ),
+									'title'         => array( 'type' => 'string' ),
+									'description'   => array( 'type' => 'string' ),
+								),
+								'required'   => array( 'attachment_id' ),
+							),
+						),
+						'dry_run' => array(
+							'type'        => 'boolean',
+							'description' => 'Preview the changes without saving. Defaults to false.',
+							'default'     => false,
+						),
+					),
+					'required'   => array( 'items' ),
+				),
+				'output_schema'       => array(
+					'type'       => 'object',
+					'properties' => array(
+						'updated' => array( 'type' => 'integer' ),
+						'changes' => array( 'type' => 'array' ),
+						'errors'  => array( 'type' => 'array' ),
+						'dry_run' => array( 'type' => 'boolean' ),
+					),
+				),
+				'execute_callback'    => array( __CLASS__, 'execute_update_media' ),
+				'permission_callback' => array( __CLASS__, 'can_upload_files' ),
+			),
+
 			'fdj/manage-menu' => array(
 				'is_write'            => true,
 				'label'               => 'Manage a Navigation Menu',
@@ -3178,6 +3227,118 @@ class FDJ_MCP_Abilities {
 		}
 
 		return '' !== $key;
+	}
+
+	/**
+	 * Set caption, alt text, title and/or description on attachments, in bulk.
+	 *
+	 * The gate is upload_files; each attachment is then checked with edit_post, so
+	 * an Author cannot rewrite captions on media they could not edit in wp-admin.
+	 * One bad item is reported and skipped rather than failing the whole batch,
+	 * since a caption pass over a gallery is only useful if the rest still lands.
+	 *
+	 * @param array $input Ability input.
+	 * @return array|WP_Error
+	 */
+	public static function execute_update_media( $input = array() ) {
+		$items = isset( $input['items'] ) ? $input['items'] : null;
+
+		if ( ! is_array( $items ) || empty( $items ) ) {
+			return new WP_Error( 'fdj_empty_items', 'items must be a non-empty array of attachments to update.' );
+		}
+
+		if ( count( $items ) > 200 ) {
+			return new WP_Error( 'fdj_too_many_items', 'At most 200 attachments per call. Nothing was written.' );
+		}
+
+		$dry_run = ! empty( $input['dry_run'] );
+		$fields  = array(
+			'caption'     => 'post_excerpt',
+			'title'       => 'post_title',
+			'description' => 'post_content',
+		);
+		$changes = array();
+		$errors  = array();
+		$updated = 0;
+
+		foreach ( $items as $item ) {
+			if ( $item instanceof stdClass ) {
+				$item = (array) $item;
+			}
+
+			$id   = isset( $item['attachment_id'] ) ? (int) $item['attachment_id'] : 0;
+			$post = $id ? get_post( $id ) : null;
+
+			if ( ! $post || 'attachment' !== $post->post_type ) {
+				$errors[] = array( 'attachment_id' => $id, 'error' => 'No media attachment found with that ID.' );
+				continue;
+			}
+
+			if ( ! current_user_can( 'edit_post', $post->ID ) ) {
+				$errors[] = array( 'attachment_id' => $id, 'error' => 'You are not allowed to edit this attachment.' );
+				continue;
+			}
+
+			$postarr = array( 'ID' => $post->ID );
+			$diff    = array();
+
+			foreach ( $fields as $key => $column ) {
+				if ( ! array_key_exists( $key, $item ) ) {
+					continue;
+				}
+
+				$value = wp_kses_post( (string) $item[ $key ] );
+
+				if ( $value !== $post->$column ) {
+					$postarr[ $column ] = $value;
+					$diff[ $key ]       = array( 'before' => $post->$column, 'after' => $value );
+				}
+			}
+
+			$alt_changed = false;
+
+			if ( array_key_exists( 'alt_text', $item ) ) {
+				$alt    = sanitize_text_field( (string) $item['alt_text'] );
+				$before = (string) get_post_meta( $post->ID, '_wp_attachment_image_alt', true );
+
+				if ( $alt !== $before ) {
+					$diff['alt_text'] = array( 'before' => $before, 'after' => $alt );
+					$alt_changed      = true;
+				}
+			}
+
+			if ( empty( $diff ) ) {
+				continue;
+			}
+
+			$changes[] = array( 'attachment_id' => $id, 'changes' => $diff );
+
+			if ( $dry_run ) {
+				continue;
+			}
+
+			if ( count( $postarr ) > 1 ) {
+				$result = wp_update_post( wp_slash( $postarr ), true );
+
+				if ( is_wp_error( $result ) ) {
+					$errors[] = array( 'attachment_id' => $id, 'error' => $result->get_error_message() );
+					continue;
+				}
+			}
+
+			if ( $alt_changed ) {
+				update_post_meta( $post->ID, '_wp_attachment_image_alt', wp_slash( $alt ) );
+			}
+
+			$updated++;
+		}
+
+		return array(
+			'updated' => $dry_run ? 0 : $updated,
+			'changes' => $changes,
+			'errors'  => $errors,
+			'dry_run' => $dry_run,
+		);
 	}
 
 	/**

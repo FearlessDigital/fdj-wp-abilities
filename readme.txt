@@ -4,7 +4,7 @@ Tags: mcp, ai, claude, abilities, rest-api
 Requires at least: 6.9
 Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: 1.5.0
+Stable tag: 1.6.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -48,6 +48,10 @@ On WordPress 6.9 and 7.0 an ability must set `meta.show_in_rest` and `meta.mcp.p
 Check the Basic auth row in the health panel. Some hosts pass the Authorization header but never populate PHP_AUTH_USER, which is the only thing core reads. The bundled shim handles that case.
 
 == Changelog ==
+
+= 1.6.0 =
+* New: fdj/update-media. Sets caption, alt text, title or description on up to 200 attachments per call, with dry_run. Nothing could write these before: a caption lives in the attachment's post_excerpt, which no ability reached, and alt text in _wp_attachment_image_alt. Galleries and lightboxes, Avada's included, read the caption from the attachment rather than the page, so a gallery built with every shortcode correct still showed no captions. Found on a 2,300-article archive import that needed 131 gallery captions set. One bad item is reported and skipped instead of failing the batch. Each attachment is checked with edit_post, not just upload_files.
+* Existing installs: the new ability is off until enabled under Tools > Claude MCP.
 
 = 1.5.0 =
 * New: fdj/list-post-types. Lists every registered post type with its exact name, whether it is public, the taxonomies on it and its post counts. Added because pointing an ability at a post type name that does not exist returned an empty list identical to a real type holding nothing, and that false negative was read as proof the thing was absent. On an Avada build it is what tells you the real name of the type holding Layouts instead of guessing at it.
