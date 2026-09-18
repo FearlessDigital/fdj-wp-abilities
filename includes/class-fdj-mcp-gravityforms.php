@@ -13,7 +13,10 @@
  * Forms changes nothing: get_definitions() returns an empty array, nothing
  * appears in the settings screen, and register() registers nothing.
  *
- * Read-only by design, matching this plugin's default posture. In
+ * Read-only by design, matching this plugin's default posture, with one
+ * narrow exception: gravityforms/update-entry (1.7.0) lets an agent record
+ * what it did with a submission (a status field, a note, active vs spam).
+ * It cannot delete, trash, resend or submit. In
  * particular, there is deliberately no "resend notifications" ability here:
  * that action replays a form's configured notification for entries that
  * already ran once, to whatever recipients are configured today, and a
@@ -252,6 +255,60 @@ class FDJ_MCP_GravityForms {
 				'permission_callback' => array( __CLASS__, 'can_view_gf_entries' ),
 			),
 
+			'gravityforms/update-entry' => array(
+				'is_write'            => true,
+				'requires'            => 'gravityforms',
+				'label'               => 'Update Gravity Forms Entry',
+				'description'         => 'Record what happened to one entry: set field values (e.g. an admin-only Status field from "New" to "Fixed"), add a note to the entry, and/or move it between active and spam. This is how an agent working through a queue of submissions marks each one done, so the next run and the people reading the entries in wp-admin both see it. Only the fields you pass change. Field keys are Gravity Forms field or input IDs as strings ("10", or "1.2" for one checkbox). It cannot delete or trash an entry. Run with dry_run first.',
+				'category'            => 'site',
+				'annotations'         => array(
+					'readonly'    => false,
+					'destructive' => false,
+					'idempotent'  => false,
+				),
+				'input_schema'        => array(
+					'type'       => 'object',
+					'properties' => array(
+						'entry_id' => array(
+							'type'        => 'integer',
+							'description' => 'The Gravity Forms entry ID.',
+						),
+						'fields'   => array(
+							'type'                 => 'object',
+							'description'          => 'Field or input ID => new value, e.g. {"10": "Fixed"}. Pass an empty string to clear a value.',
+							'additionalProperties' => array( 'type' => 'string' ),
+						),
+						'note'     => array(
+							'type'        => 'string',
+							'description' => 'Text to add as a note on the entry, e.g. what was changed and why. Notes show in the entry screen in wp-admin.',
+						),
+						'status'   => array(
+							'type'        => 'string',
+							'enum'        => array( 'active', 'spam' ),
+							'description' => 'Move the entry to active (e.g. a real submission caught by the spam filter) or to spam.',
+						),
+						'dry_run'  => array(
+							'type'        => 'boolean',
+							'description' => 'Report what would change without saving anything.',
+							'default'     => false,
+						),
+					),
+					'required'   => array( 'entry_id' ),
+				),
+				'output_schema'       => array(
+					'type'       => 'object',
+					'properties' => array(
+						'entry_id'   => array( 'type' => 'integer' ),
+						'dry_run'    => array( 'type' => 'boolean' ),
+						'fields'     => array( 'type' => 'array' ),
+						'status'     => array( 'type' => 'object' ),
+						'note_added' => array( 'type' => 'boolean' ),
+					),
+				),
+				'execute_callback'    => array( __CLASS__, 'execute_update_entry' ),
+				'permission_callback' => array( __CLASS__, 'can_edit_gf_entries' ),
+			),
+
 			'gravityforms/list-feeds' => array(
 				'is_write'            => false,
 				'requires'            => 'gravityforms',
@@ -393,6 +450,15 @@ class FDJ_MCP_GravityForms {
 	 */
 	public static function can_view_gf_entries() {
 		return current_user_can( 'gravityforms_view_entries' ) || current_user_can( 'manage_options' );
+	}
+
+	/**
+	 * Can the current user edit entries? Same fallback reasoning as can_view_gf_entries().
+	 *
+	 * @return bool
+	 */
+	public static function can_edit_gf_entries() {
+		return current_user_can( 'gravityforms_edit_entries' ) || current_user_can( 'manage_options' );
 	}
 
 	/**
@@ -729,6 +795,91 @@ class FDJ_MCP_GravityForms {
 		$row['fields'] = self::extract_entry_fields( $entry, $label_map );
 
 		return $row;
+	}
+
+	/**
+	 * Set field values, add a note, or move one entry between active and spam.
+	 *
+	 * @param array $input Ability input.
+	 * @return array|WP_Error
+	 */
+	public static function execute_update_entry( $input = array() ) {
+		$entry_id = isset( $input['entry_id'] ) ? (int) $input['entry_id'] : 0;
+		$dry_run  = ! empty( $input['dry_run'] );
+		$entry    = GFAPI::get_entry( $entry_id );
+
+		if ( is_wp_error( $entry ) ) {
+			return new WP_Error( 'fdj_gf_entry_not_found', sprintf( 'No Gravity Forms entry found with ID %d.', $entry_id ) );
+		}
+
+		$form = self::get_form_or_error( (int) $entry['form_id'] );
+		if ( is_wp_error( $form ) ) {
+			return $form;
+		}
+
+		// Every key must be a real field or input on this form: a typo would otherwise
+		// write a value into an entry column nothing ever reads, and report success.
+		$valid = array();
+		foreach ( (array) $form['fields'] as $field ) {
+			$valid[ (string) $field->id ] = $field->label;
+			foreach ( (array) $field->inputs as $sub ) {
+				$valid[ (string) $sub['id'] ] = $field->label . ( empty( $sub['label'] ) ? '' : ' — ' . $sub['label'] );
+			}
+		}
+
+		$fields = isset( $input['fields'] ) && is_array( $input['fields'] ) ? $input['fields'] : array();
+		foreach ( array_keys( $fields ) as $key ) {
+			if ( ! isset( $valid[ (string) $key ] ) ) {
+				return new WP_Error(
+					'fdj_gf_unknown_field',
+					sprintf( 'Form %d has no field or input with ID "%s". Use gravityforms/get-form to see its field IDs.', (int) $entry['form_id'], $key )
+				);
+			}
+		}
+
+		$status = isset( $input['status'] ) ? (string) $input['status'] : '';
+		if ( '' !== $status && ! in_array( $status, array( 'active', 'spam' ), true ) ) {
+			return new WP_Error( 'fdj_gf_bad_status', 'status must be "active" or "spam". Deleting or trashing entries is not available here.' );
+		}
+
+		$changes = array();
+		foreach ( $fields as $key => $value ) {
+			$old = (string) rgar( $entry, (string) $key );
+			$new = (string) $value;
+			if ( $old === $new ) {
+				continue;
+			}
+			$changes[] = array( 'field_id' => (string) $key, 'label' => $valid[ (string) $key ], 'old' => $old, 'new' => $new );
+			if ( ! $dry_run ) {
+				$result = GFAPI::update_entry_field( $entry_id, (string) $key, $new );
+				if ( ! $result || is_wp_error( $result ) ) {
+					return new WP_Error( 'fdj_gf_update_failed', sprintf( 'Could not save field %s on entry %d.', $key, $entry_id ) );
+				}
+			}
+		}
+
+		$status_change = null;
+		if ( '' !== $status && $status !== $entry['status'] ) {
+			$status_change = array( 'old' => $entry['status'], 'new' => $status );
+			if ( ! $dry_run ) {
+				GFAPI::update_entry_property( $entry_id, 'status', $status );
+			}
+		}
+
+		$note       = isset( $input['note'] ) ? trim( (string) $input['note'] ) : '';
+		$note_added = false;
+		if ( '' !== $note && ! $dry_run ) {
+			$user       = wp_get_current_user();
+			$note_added = ! is_wp_error( GFAPI::add_note( $entry_id, $user->ID, $user->display_name, $note ) );
+		}
+
+		return array(
+			'entry_id'   => $entry_id,
+			'dry_run'    => $dry_run,
+			'fields'     => $changes,
+			'status'     => $status_change,
+			'note_added' => $dry_run ? ( '' !== $note ) : $note_added,
+		);
 	}
 
 	/**

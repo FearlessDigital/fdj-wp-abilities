@@ -4,7 +4,7 @@ Tags: mcp, ai, claude, abilities, rest-api
 Requires at least: 6.9
 Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: 1.6.0
+Stable tag: 1.7.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -48,6 +48,10 @@ On WordPress 6.9 and 7.0 an ability must set `meta.show_in_rest` and `meta.mcp.p
 Check the Basic auth row in the health panel. Some hosts pass the Authorization header but never populate PHP_AUTH_USER, which is the only thing core reads. The bundled shim handles that case.
 
 == Changelog ==
+
+= 1.7.0 =
+* New: gravityforms/update-entry. Sets field values on one entry (for example an admin-only Status field from "New" to "Fixed"), adds a note, and/or moves the entry between active and spam, with dry_run. Until now every Gravity Forms ability was read-only, so an agent working through a queue of submissions could read each one but had no way to mark it done: the next run saw the same entries as new, and nobody reading the entries in wp-admin could tell what had been handled. Built for a weekly corrections agent on a 2,300-article archive, where readers report problems through a form. Field keys are checked against the form, so a mistyped ID is refused instead of writing a value nothing reads. It cannot delete or trash an entry, resend notifications, or submit. Permission is gravityforms_edit_entries, falling back to manage_options like the read abilities.
+* Existing installs: the new ability is off until enabled under Tools > Claude MCP.
 
 = 1.6.0 =
 * New: fdj/update-media. Sets caption, alt text, title or description on up to 200 attachments per call, with dry_run. Nothing could write these before: a caption lives in the attachment's post_excerpt, which no ability reached, and alt text in _wp_attachment_image_alt. Galleries and lightboxes, Avada's included, read the caption from the attachment rather than the page, so a gallery built with every shortcode correct still showed no captions. Found on a 2,300-article archive import that needed 131 gallery captions set. One bad item is reported and skipped instead of failing the batch. Each attachment is checked with edit_post, not just upload_files.
