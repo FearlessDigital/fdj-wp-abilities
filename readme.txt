@@ -4,7 +4,7 @@ Tags: mcp, ai, claude, abilities, rest-api
 Requires at least: 6.9
 Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: 1.7.0
+Stable tag: 1.8.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -48,6 +48,12 @@ On WordPress 6.9 and 7.0 an ability must set `meta.show_in_rest` and `meta.mcp.p
 Check the Basic auth row in the health panel. Some hosts pass the Authorization header but never populate PHP_AUTH_USER, which is the only thing core reads. The bundled shim handles that case.
 
 == Changelog ==
+
+= 1.8.0 =
+* New: fdj/create-user, fdj/list-users, fdj/send-password-reset and fdj/set-post-author, plus an optional "author" on fdj/create-post. A directory build could create the listing but not the person who owns it, so every import stopped at the one step that had to be done by hand in wp-admin: make the account, make them the listing's author, get them a login. Built for a teacher directory where each new listing needs its own subscriber account.
+* No ability in this plugin takes or returns a password. A new account gets a long random one generated internally and never disclosed; with notify left on, WordPress emails the person its own set-a-password link, which is also why no separate "welcome" email is needed. fdj/send-password-reset triggers the same standard email for an account that already exists.
+* Roles are an allowlist: subscriber, contributor, author. Editor and administrator cannot be assigned, existing users' roles cannot be changed, no ability deletes a user or edits an existing account's email address, and fdj/create-user is idempotent by email so re-running an import returns the account it made last time instead of a duplicate.
+* Existing installs: all four are off until enabled under Tools > Claude MCP.
 
 = 1.7.0 =
 * New: gravityforms/update-entry. Sets field values on one entry (for example an admin-only Status field from "New" to "Fixed"), adds a note, and/or moves the entry between active and spam, with dry_run. Until now every Gravity Forms ability was read-only, so an agent working through a queue of submissions could read each one but had no way to mark it done: the next run saw the same entries as new, and nobody reading the entries in wp-admin could tell what had been handled. Built for a weekly corrections agent on a 2,300-article archive, where readers report problems through a form. Field keys are checked against the form, so a mistyped ID is refused instead of writing a value nothing reads. It cannot delete or trash an entry, resend notifications, or submit. Permission is gravityforms_edit_entries, falling back to manage_options like the read abilities.

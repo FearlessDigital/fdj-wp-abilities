@@ -215,6 +215,18 @@ Phase 2, for site-wide changes ("make every H1 74px") rather than one page at a 
 
 Elementor and Divi, once Fusion Builder is solid and this ships. Divi next. The `requires` tag and detector this version added is the piece that was missing to do this without a settings-screen change each time.
 
+### User abilities
+
+Built in 1.8.0, core WordPress, no dependency:
+
+- `fdj/list-users` — search by name, email, login or role. Run it before creating anyone: a returning member already having an account is the usual case and the usual cause of a duplicate.
+- `fdj/create-user` — takes no password and never returns one. A long random password is generated internally, and with `notify` on WordPress sends the person its own set-a-password link. Roles are limited to subscriber, contributor, author. Idempotent by email: an existing account comes back as `existing: true` rather than erroring or duplicating, so a half-finished import can simply be run again. `dry_run` shows the username that would be taken.
+- `fdj/send-password-reset` — the standard "Lost your password?" email for one existing account, for someone whose account predates the process or who never acted on the original.
+- `fdj/set-post-author` — reassign a post, page or listing to its real owner. Nothing else in the plugin could change `post_author`, and on a directory site a listing owned by the wrong account shows the owner an empty dashboard.
+- `fdj/create-post` also gained an optional `author`, so a listing can be created under its owner in one call instead of two. An author that cannot be resolved is refused rather than quietly falling back to the connection's own account, which would look like success and leave the real owner locked out.
+
+Deliberately not built: deleting users, changing an existing user's role or email address, and setting a password directly. Each one turns account creation into account takeover, and none of them is needed to stand up a listing.
+
 ### Gravity Forms abilities
 
 Built and shipping, active only on sites running Gravity Forms (nothing appears here, in the settings screen, or anywhere else on a site that doesn't):
@@ -230,10 +242,13 @@ Deliberately not built:
 ### Other integrations, watching for a real need rather than building ahead of one
 
 - **Contact Form 7.** Same shape of problem as Gravity Forms, for any client site that runs it instead. No current site is known to need this.
-- **Nav menus, users/roles.** Both technically reachable today through the generic post/option abilities in a roundabout way; a dedicated ability would only be worth the surface area once a real task asks for one. User/role management in particular is a bigger blast radius than content, and should stay out until asked for.
+- **Nav menus.** Covered since 1.4.0 by `fdj/manage-menu`.
+- **Users.** Asked for, and built in 1.8.0 (see below) once a real task needed it: a teacher directory where every listing has to be owned by its own subscriber account. The blast-radius concern that kept it out until then is answered by narrowing the surface rather than by trusting the caller: a role allowlist that stops at `author`, no password parameter anywhere, no delete, no role change on an existing user, and no way to edit an existing account's email address.
+- **Roles and capabilities themselves.** Still out. Creating a user inside a fixed allowlist is a different risk from editing what a role can do, and nothing has needed the latter.
 
 ## Version history
 
+- `1.8.0` - user abilities: `fdj/create-user`, `fdj/list-users`, `fdj/send-password-reset`, `fdj/set-post-author`, and an optional `author` on `fdj/create-post`. A build could make the listing but not the person who owns it, so every directory import stopped at wp-admin. No password is ever taken or returned; WordPress's own new-user email carries the set-password link.
 - `1.4.2` - fixed `fdj/update-post-meta` and `fdj/set-post-terms` being enabled but never registered: both were given a `content` category in 1.4.0, and nothing registers one, so the Abilities API refused them while the settings screen still showed them ticked. The health panel's exposed-count check is what surfaced it.
 - `1.7.0` - `gravityforms/update-entry`: set field values (e.g. an admin-only Status), add a note, or move an entry between active and spam, with `dry_run`. The first Gravity Forms write; before it an agent could read a queue of submissions but never mark one done.
 - `1.6.0` - `fdj/update-media`: bulk caption/alt/title/description writes on attachments, with `dry_run`. Captions live in `post_excerpt` and alt text in `_wp_attachment_image_alt`, neither reachable by any other ability, and Avada galleries read captions from the attachment, so a correctly built gallery still showed none.

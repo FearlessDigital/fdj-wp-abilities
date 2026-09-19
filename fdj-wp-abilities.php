@@ -2,7 +2,7 @@
 /**
  * Plugin Name:       FDJ WordPress Abilities for MCP
  * Description:       Self-contained MCP toolkit for WordPress. Registers page/post abilities, repairs Application Password auth on nginx/PHP-FPM hosts, and adds one-click connection setup, a health panel, and an audit log. Upload, activate, go.
- * Version:           1.7.0
+ * Version:           1.8.0
  * Requires at least: 6.9
  * Requires PHP:      7.4
  * Author:            Fearless Digital Journey
@@ -28,7 +28,7 @@
 
 defined( 'ABSPATH' ) || exit;
 
-define( 'FDJ_MCP_VERSION', '1.7.0' );
+define( 'FDJ_MCP_VERSION', '1.8.0' );
 define( 'FDJ_MCP_FILE', __FILE__ );
 define( 'FDJ_MCP_DIR', plugin_dir_path( __FILE__ ) );
 define( 'FDJ_MCP_OPTION', 'fdj_mcp_settings' );
@@ -102,6 +102,7 @@ if ( empty( $_SERVER['PHP_AUTH_USER'] )
 
 require_once FDJ_MCP_DIR . 'includes/class-fdj-mcp-abilities.php';
 require_once FDJ_MCP_DIR . 'includes/class-fdj-mcp-gravityforms.php';
+require_once FDJ_MCP_DIR . 'includes/class-fdj-mcp-users.php';
 require_once FDJ_MCP_DIR . 'includes/class-fdj-mcp-health.php';
 require_once FDJ_MCP_DIR . 'includes/class-fdj-mcp-audit.php';
 require_once FDJ_MCP_DIR . 'includes/class-fdj-mcp-bundle.php';
@@ -161,8 +162,9 @@ function fdj_mcp_server_url() {
 /**
  * Ability definitions from every provider this plugin ships, merged.
  *
- * FDJ_MCP_Abilities covers core WordPress content; FDJ_MCP_GravityForms
- * covers Gravity Forms and is empty on any site not running it. Settings,
+ * FDJ_MCP_Abilities covers core WordPress content; FDJ_MCP_Users covers
+ * accounts; FDJ_MCP_GravityForms covers Gravity Forms and is empty on any site
+ * not running it. Settings,
  * Health, and Audit all need the full set, not just the first provider's, so
  * this is the one place that knows the complete list — the same place the
  * require_once calls above already do.
@@ -172,7 +174,8 @@ function fdj_mcp_server_url() {
 function fdj_mcp_all_ability_definitions() {
 	return array_merge(
 		FDJ_MCP_Abilities::get_definitions(),
-		FDJ_MCP_GravityForms::get_definitions()
+		FDJ_MCP_GravityForms::get_definitions(),
+		FDJ_MCP_Users::get_definitions()
 	);
 }
 
@@ -227,6 +230,7 @@ function fdj_mcp_available_ability_definitions() {
 
 FDJ_MCP_Abilities::init();
 FDJ_MCP_GravityForms::init();
+FDJ_MCP_Users::init();
 FDJ_MCP_Health::init();
 FDJ_MCP_Audit::init();
 FDJ_MCP_Bundle::init();

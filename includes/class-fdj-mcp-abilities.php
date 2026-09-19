@@ -630,7 +630,7 @@ class FDJ_MCP_Abilities {
 			'fdj/create-post' => array(
 				'is_write'            => true,
 				'label'               => 'Create Post or Page',
-				'description'         => 'Create a new WordPress post or page with the given title, content, and type. Content can include raw page builder shortcodes.',
+				'description'         => 'Create a new WordPress post or page with the given title, content, and type. Content can include raw page builder shortcodes. Pass "author" to make someone else the owner from the start, which a directory listing usually needs; without it the post belongs to whoever the connection authenticates as.',
 				'category'            => 'site',
 				'annotations'         => array(
 					'readonly'    => false,
@@ -651,6 +651,10 @@ class FDJ_MCP_Abilities {
 							'enum'    => array( 'draft', 'pending', 'publish', 'private' ),
 							'default' => 'draft',
 						),
+						'author'    => array(
+							'type'        => 'string',
+							'description' => 'Optional owner of the new post: user ID, login, or email address. Requires permission to assign other people\'s posts. Use fdj/list-users or fdj/create-user to get one.',
+						),
 					),
 					'required'   => array( 'title', 'content' ),
 				),
@@ -659,6 +663,7 @@ class FDJ_MCP_Abilities {
 					'properties' => array(
 						'post_id'  => array( 'type' => 'integer' ),
 						'status'   => array( 'type' => 'string' ),
+						'author'   => array( 'type' => 'integer' ),
 						'edit_url' => array( 'type' => 'string' ),
 						'view_url' => array( 'type' => 'string' ),
 					),
@@ -2114,15 +2119,53 @@ class FDJ_MCP_Abilities {
 	 * @return array|WP_Error
 	 */
 	public static function execute_create_post( $input = array() ) {
-		$post_id = wp_insert_post(
-			array(
-				'post_title'   => $input['title'],
-				'post_content' => $input['content'],
-				'post_type'    => isset( $input['post_type'] ) ? $input['post_type'] : 'page',
-				'post_status'  => isset( $input['status'] ) ? $input['status'] : 'draft',
-			),
-			true
+		$post_type = isset( $input['post_type'] ) ? $input['post_type'] : 'page';
+
+		$args = array(
+			'post_title'   => $input['title'],
+			'post_content' => $input['content'],
+			'post_type'    => $post_type,
+			'post_status'  => isset( $input['status'] ) ? $input['status'] : 'draft',
 		);
+
+		/*
+		 * An "author" that cannot be resolved is refused rather than quietly
+		 * ignored. Silently creating the post under the connection's own
+		 * account would look like success and leave the real owner locked out
+		 * of a listing that is supposedly theirs.
+		 */
+		if ( ! empty( $input['author'] ) ) {
+			$author = class_exists( 'FDJ_MCP_Users' )
+				? FDJ_MCP_Users::resolve_user_public( $input['author'] )
+				: null;
+
+			if ( ! $author ) {
+				return new WP_Error(
+					'fdj_user_not_found',
+					__( 'No user matches that ID, login, or email address.', 'fdj-wp-abilities' ),
+					array( 'status' => 404 )
+				);
+			}
+
+			if ( (int) $author->ID !== get_current_user_id() ) {
+				$type_obj = get_post_type_object( $post_type );
+				$cap      = ( $type_obj && isset( $type_obj->cap->edit_others_posts ) )
+					? $type_obj->cap->edit_others_posts
+					: 'edit_others_posts';
+
+				if ( ! current_user_can( $cap ) ) {
+					return new WP_Error(
+						'fdj_cannot_assign_author',
+						__( 'This connection cannot create posts owned by another user.', 'fdj-wp-abilities' ),
+						array( 'status' => 403 )
+					);
+				}
+			}
+
+			$args['post_author'] = (int) $author->ID;
+		}
+
+		$post_id = wp_insert_post( $args, true );
 
 		if ( is_wp_error( $post_id ) ) {
 			return $post_id;
@@ -2131,6 +2174,7 @@ class FDJ_MCP_Abilities {
 		return array(
 			'post_id'  => (int) $post_id,
 			'status'   => get_post_status( $post_id ),
+			'author'   => (int) get_post_field( 'post_author', $post_id ),
 			'edit_url' => (string) get_edit_post_link( $post_id, 'raw' ),
 			'view_url' => (string) get_permalink( $post_id ),
 		);
