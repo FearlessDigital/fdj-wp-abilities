@@ -227,6 +227,18 @@ Built in 1.8.0, core WordPress, no dependency:
 
 Deliberately not built: deleting users, changing an existing user's role or email address, and setting a password directly. Each one turns account creation into account takeover, and none of them is needed to stand up a listing.
 
+### GeoDirectory abilities
+
+Built in 1.9.0, active only on sites running GeoDirectory:
+
+- `fdj/get-listing` — the fields that are not post meta: address, coordinates, contact details, package, and every custom field. Without it a listing reads as a title and a description while its visible address is unreachable.
+- `fdj/update-listing` — the only way to write those fields. Validates names against the listing table's own columns, so a custom field added in GeoDirectory's settings works immediately and a typo is refused rather than accepted and ignored. **Reads every value back and reports what is actually stored**, because GeoDirectory rebuilds a listing's row at the end of the request that created the post: fields written in that same request are replaced by defaults, and the plugin re-geocodes from what survives. On a real batch that produced a Sarasota teacher with a Chico, California address, on a page that otherwise looked right. Create the post in one call, set its fields in the next.
+- `fdj/list-listing-fields` — what fields exist and what a select field's options are. Option lists are omitted from the full listing on purpose: one field on a live site holds 435 options.
+- `fdj/add-listing-field-option` — add options to a select or multiselect without reordering or dropping what is there. The storage is newline-separated while a listing's values are comma-separated, and a value that is not an option fails silently.
+- `fdj/geocode-address` — city, region, postcode, country and coordinates from an address, using the site's own Maps key so the key stays server-side. Real address lists are too inconsistent to parse by hand, and a listing with no coordinates never appears on the map.
+
+Deliberately not built: creating or deleting a listing. Creation is `fdj/create-post` followed by `fdj/update-listing`, which is also the sequence that avoids the overwrite above.
+
 ### Gravity Forms abilities
 
 Built and shipping, active only on sites running Gravity Forms (nothing appears here, in the settings screen, or anywhere else on a site that doesn't):
@@ -248,6 +260,7 @@ Deliberately not built:
 
 ## Version history
 
+- `1.9.0` - GeoDirectory abilities: `fdj/get-listing`, `fdj/update-listing`, `fdj/list-listing-fields`, `fdj/add-listing-field-option`, `fdj/geocode-address`. Listing fields live in GeoDirectory's own table, invisible to every other ability. `update-listing` verifies its own writes because GeoDirectory can undo them without an error.
 - `1.8.0` - user abilities: `fdj/create-user`, `fdj/list-users`, `fdj/send-password-reset`, `fdj/set-post-author`, and an optional `author` on `fdj/create-post`. A build could make the listing but not the person who owns it, so every directory import stopped at wp-admin. No password is ever taken or returned; WordPress's own new-user email carries the set-password link.
 - `1.4.2` - fixed `fdj/update-post-meta` and `fdj/set-post-terms` being enabled but never registered: both were given a `content` category in 1.4.0, and nothing registers one, so the Abilities API refused them while the settings screen still showed them ticked. The health panel's exposed-count check is what surfaced it.
 - `1.7.0` - `gravityforms/update-entry`: set field values (e.g. an admin-only Status), add a note, or move an entry between active and spam, with `dry_run`. The first Gravity Forms write; before it an agent could read a queue of submissions but never mark one done.

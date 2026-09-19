@@ -4,7 +4,7 @@ Tags: mcp, ai, claude, abilities, rest-api
 Requires at least: 6.9
 Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: 1.8.0
+Stable tag: 1.9.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -48,6 +48,14 @@ On WordPress 6.9 and 7.0 an ability must set `meta.show_in_rest` and `meta.mcp.p
 Check the Basic auth row in the health panel. Some hosts pass the Authorization header but never populate PHP_AUTH_USER, which is the only thing core reads. The bundled shim handles that case.
 
 == Changelog ==
+
+= 1.9.0 =
+* New: fdj/get-listing, fdj/update-listing, fdj/list-listing-fields, fdj/add-listing-field-option and fdj/geocode-address, active only on sites running GeoDirectory. A listing keeps almost nothing in post meta - the address, coordinates, package and every custom field live in GeoDirectory's own table - so until now a listing read through this plugin looked like a title and a description with the visible address nowhere, and nothing could write one at all.
+* fdj/update-listing reads every value back after writing and reports what is actually stored. This is not belt and braces: GeoDirectory rebuilds a listing's row for itself at the end of the request that created the post, so fields written during that request are replaced by defaults and the plugin then re-geocodes from the remains. On a real batch that turned a Sarasota address into one in Chico, California while the page kept its title and content, which reads as success. Create the post in one call and set its fields in the next.
+* Field names are validated against the listing table's own columns, so a custom field added in GeoDirectory's settings is writable immediately and a typo is refused instead of accepted and silently ignored.
+* fdj/add-listing-field-option adds to a select or multiselect field's option list without reordering or removing what is there. Option lists are newline-separated while a listing's chosen values are comma-separated, and a value that is not on the list fails silently, which is a hard thing to debug from the front end.
+* fdj/geocode-address uses the site's own Google Maps key, so the key stays on the server. Prefer it to parsing addresses: it also reports partial matches, and it will not turn "Ln" into "Lane" behind your back if you keep the street line as written and take only city, region, postcode and coordinates from it.
+* Existing installs: all five are off until enabled under Tools > Claude MCP.
 
 = 1.8.0 =
 * New: fdj/create-user, fdj/list-users, fdj/send-password-reset and fdj/set-post-author, plus an optional "author" on fdj/create-post. A directory build could create the listing but not the person who owns it, so every import stopped at the one step that had to be done by hand in wp-admin: make the account, make them the listing's author, get them a login. Built for a teacher directory where each new listing needs its own subscriber account.
