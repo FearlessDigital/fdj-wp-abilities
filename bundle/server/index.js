@@ -52,6 +52,14 @@ const AUTH = 'Basic ' + Buffer.from(USERNAME + ':' + PASSWORD).toString('base64'
 let sessionId = null;
 
 /*
+ * Protocol version negotiated on initialize. The MCP spec (2025-06-18 onward)
+ * requires the client to repeat it in an MCP-Protocol-Version header on every
+ * request after initialize, and newer MCP Adapter releases enforce that with
+ * "MCP-Protocol-Version header is required for a <version> session".
+ */
+let protocolVersion = null;
+
+/*
  * The client's own initialize message, kept so the session can be rebuilt
  * without the client's involvement. See recoverAndRetry() for why that is
  * necessary rather than merely tidy.
@@ -79,6 +87,10 @@ function post(message) {
 
 		if (sessionId) {
 			headers['Mcp-Session-Id'] = sessionId;
+		}
+
+		if (protocolVersion && message.method !== 'initialize') {
+			headers['MCP-Protocol-Version'] = protocolVersion;
 		}
 
 		const req = transport.request(
@@ -112,7 +124,13 @@ function post(message) {
 						return;
 					}
 
-					resolve(parseBody(raw, message, res.statusCode));
+					const parsed = parseBody(raw, message, res.statusCode);
+
+					if (message.method === 'initialize' && parsed && parsed.result && parsed.result.protocolVersion) {
+						protocolVersion = parsed.result.protocolVersion;
+					}
+
+					resolve(parsed);
 				});
 			}
 		);
