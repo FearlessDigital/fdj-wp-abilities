@@ -104,6 +104,7 @@ require_once FDJ_MCP_DIR . 'includes/class-fdj-mcp-abilities.php';
 require_once FDJ_MCP_DIR . 'includes/class-fdj-mcp-gravityforms.php';
 require_once FDJ_MCP_DIR . 'includes/class-fdj-mcp-users.php';
 require_once FDJ_MCP_DIR . 'includes/class-fdj-mcp-geodirectory.php';
+require_once FDJ_MCP_DIR . 'includes/class-fdj-mcp-annual-reset.php';
 require_once FDJ_MCP_DIR . 'includes/class-fdj-mcp-health.php';
 require_once FDJ_MCP_DIR . 'includes/class-fdj-mcp-audit.php';
 require_once FDJ_MCP_DIR . 'includes/class-fdj-mcp-bundle.php';
@@ -165,7 +166,9 @@ function fdj_mcp_server_url() {
  *
  * FDJ_MCP_Abilities covers core WordPress content; FDJ_MCP_Users covers
  * accounts; FDJ_MCP_GravityForms and FDJ_MCP_GeoDirectory cover those plugins
- * and are empty on any site not running them. Settings,
+ * and are empty on any site not running them; FDJ_MCP_Annual_Reset covers the
+ * yearly-reset tools (menus, search, reports, plus Gravity Forms and
+ * WooCommerce groups that appear only where those plugins run). Settings,
  * Health, and Audit all need the full set, not just the first provider's, so
  * this is the one place that knows the complete list — the same place the
  * require_once calls above already do.
@@ -177,7 +180,8 @@ function fdj_mcp_all_ability_definitions() {
 		FDJ_MCP_Abilities::get_definitions(),
 		FDJ_MCP_GravityForms::get_definitions(),
 		FDJ_MCP_Users::get_definitions(),
-		FDJ_MCP_GeoDirectory::get_definitions()
+		FDJ_MCP_GeoDirectory::get_definitions(),
+		FDJ_MCP_Annual_Reset::get_definitions()
 	);
 }
 
@@ -209,6 +213,9 @@ function fdj_mcp_integration_detected( $requires ) {
 		case 'geodirectory':
 			return defined( 'GEODIRECTORY_VERSION' ) || class_exists( 'GeoDirectory' );
 
+		case 'woocommerce':
+			return class_exists( 'WooCommerce' );
+
 		default:
 			return false;
 	}
@@ -237,6 +244,7 @@ FDJ_MCP_Abilities::init();
 FDJ_MCP_GravityForms::init();
 FDJ_MCP_Users::init();
 FDJ_MCP_GeoDirectory::init();
+FDJ_MCP_Annual_Reset::init();
 FDJ_MCP_Health::init();
 FDJ_MCP_Audit::init();
 FDJ_MCP_Bundle::init();

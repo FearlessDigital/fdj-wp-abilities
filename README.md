@@ -72,7 +72,7 @@ Every ability checks WordPress capabilities (`edit_post`, `edit_posts`, `create_
 
 ### Gravity Forms
 
-Only present on sites that run Gravity Forms; `get_definitions()` returns empty otherwise, so nothing appears here or in the settings screen on any other site. All six are read-only, gated on Gravity Forms' own `gravityforms_view_entries` / `gravityforms_edit_forms` capabilities rather than a WordPress core one.
+Only present on sites that run Gravity Forms; `get_definitions()` returns empty otherwise, so nothing appears here or in the settings screen on any other site. Read-only apart from `gravityforms/update-entry` (and the annual-reset write abilities below), gated on Gravity Forms' own `gravityforms_view_entries` / `gravityforms_edit_forms` capabilities rather than a WordPress core one.
 
 | Ability ID | What it does | Type | Default |
 |---|---|---|---|
@@ -85,6 +85,27 @@ Only present on sites that run Gravity Forms; `get_definitions()` returns empty 
 | `gravityforms/update-entry` | Set field values (e.g. an admin-only Status), add a note, or move an entry between active and spam. Cannot delete or trash. `dry_run` | Write | Off |
 
 `gravityforms/get-form`'s `notifications` section is the direct answer to "who gets emailed and when a form is submitted"; `confirmations` shows whether submission redirects to another page rather than just displaying a message. There is deliberately no resend-notifications ability — that action replays a form's configured notification to whatever recipients are configured *today*, for entries that already ran once, and a mis-scoped bulk resend is exactly the kind of surprise this plugin exists to prevent, not enable.
+
+### Annual-reset abilities (unreleased)
+
+For the job a client site repeats every year: set seasonal products back to a known state, archive and clear last year's form entries, check that menus, pages and notification recipients carry this year's information, and find out what is still wrong. Each exists because a real reset needed a step that could only be done by hand in wp-admin or with raw WP-CLI, where there is no dry run, no read-back and no audit log. The Gravity Forms and WooCommerce groups appear only on a site running that plugin.
+
+| Ability ID | What it does | Type | Default |
+|---|---|---|---|
+| `fdj/get-menu` | A nav menu's items with ID, parent, URL, classes and the status of the page each points at, or a list of all menus. The read half of `fdj/manage-menu`, which replaces a menu wholesale | Read | Off |
+| `fdj/search-everywhere` | Find a literal string in titles, bodies, excerpts (a product's short description), menu items and URLs, widgets, and Gravity Forms definitions, and say which. `fdj/search-content` sees only bodies | Read | Off |
+| `fdj/annual-reset-report` | Read-only checklist of what is still wrong: product stock, menu problems, last year's dates in text, form entries and recipients, failed orders. Re-run after each batch of edits | Read | Off |
+| `gravityforms/export-entries` | CSV of a form's entries with the form's own labels. File is private-named, holds personal data, and deletes itself after 24 hours. Unlocks `trash-entries` | Write | Off |
+| `gravityforms/trash-entries` | Move old entries to the GF trash (recoverable). Requires `date_end`, a covering export from the last day, a matching `expected_count`, and refuses this calendar year unless `allow_current_year`. `dry_run` | Write | Off |
+| `gravityforms/update-form` | Title, description, active state, field labels, descriptions, CSS classes, choices, field removal, notification recipients. Backs the form up first, rewrites conditional logic when a choice's value changes, refuses to delete a field still in use, reads the result back. `dry_run` | Write | Off |
+| `gravityforms/restore-form` | Put a form back to a backup taken by `update-form`. Lists backups when called without an ID | Write | Off |
+| `fdj/audit-products` | Stock, status, price, sold-individually, sales, categories and attached form for many products at once, with a text-mention column and duplicate titles | Read | Off |
+| `fdj/set-product-fields` | Stock, status, title, price, backorders, sold-individually and short description on up to 100 products, `dry_run`, read back. Cannot trash or delete | Write | Off |
+| `fdj/get-order-notes` | Notes on WooCommerce orders (why a charge failed), found by ID or by status and date. Never returns customer details | Read | Off |
+
+Safety rules that hold across the group: nothing deletes permanently; every write has `dry_run` and reports what is actually stored afterwards; `trash-entries` cannot run without a matching export and will not touch this year's entries by accident; order data is returned without names, emails or addresses.
+
+`tests/annual-reset-smoke.php` covers the pure decisions (what `trash-entries` will refuse, how `update-form` keeps conditional logic in step with a renamed choice, what counts as a menu or product problem). Run it with `php tests/annual-reset-smoke.php`. It does not exercise Gravity Forms or WooCommerce; test those on a staging copy before releasing.
 
 ## How Claude sees this
 
@@ -260,6 +281,7 @@ Deliberately not built:
 
 ## Version history
 
+- `Unreleased` - annual-reset abilities: `fdj/get-menu`, `fdj/search-everywhere`, `fdj/annual-reset-report`, `gravityforms/export-entries`, `gravityforms/trash-entries`, `gravityforms/update-form`, `gravityforms/restore-form`, `fdj/audit-products`, `fdj/set-product-fields`, `fdj/get-order-notes`; new `woocommerce` integration group. On `feature/annual-reset-abilities`, not yet released.
 - `1.9.0` - GeoDirectory abilities: `fdj/get-listing`, `fdj/update-listing`, `fdj/list-listing-fields`, `fdj/add-listing-field-option`, `fdj/geocode-address`. Listing fields live in GeoDirectory's own table, invisible to every other ability. `update-listing` verifies its own writes because GeoDirectory can undo them without an error.
 - `1.9.1` - Bridge now sends the `MCP-Protocol-Version` header on every request after initialize. Newer MCP Adapter releases reject requests without it ("MCP-Protocol-Version header is required"), so connectors failed to list tools. Installed `.mcpb` connectors must be re-downloaded.
 - `1.8.0` - user abilities: `fdj/create-user`, `fdj/list-users`, `fdj/send-password-reset`, `fdj/set-post-author`, and an optional `author` on `fdj/create-post`. A build could make the listing but not the person who owns it, so every directory import stopped at wp-admin. No password is ever taken or returned; WordPress's own new-user email carries the set-password link.

@@ -366,6 +366,7 @@ class FDJ_MCP_Settings {
 			'avada'        => __( 'Avada / Fusion Builder', 'fdj-wp-abilities' ),
 			'gravityforms' => __( 'Gravity Forms', 'fdj-wp-abilities' ),
 			'geodirectory' => __( 'GeoDirectory', 'fdj-wp-abilities' ),
+			'woocommerce'  => __( 'WooCommerce', 'fdj-wp-abilities' ),
 		);
 
 		// Bucket by the "requires" tag. Nothing not currently detected reaches
