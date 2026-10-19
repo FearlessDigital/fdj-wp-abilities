@@ -176,6 +176,12 @@ ok( isset( $by[6] ) && false !== strpos( $by[6][0], 'draft' ), 'a link to a draf
 ok( isset( $by[7] ) && false !== strpos( implode( ' ', $by[7] ), 'same title as item 4' ), 'a duplicate title is flagged (case insensitive)' );
 ok( isset( $by[8] ) && false !== strpos( implode( ' ', $by[8] ), 'same link as item 3' ), 'a duplicate link is flagged (trailing slash ignored)' );
 
+$hid = FDJ_MCP_Annual_Reset::menu_issues( array(
+	array( 'id' => 1, 'parent' => 0, 'title' => 'Prepaid Catalog Order', 'url' => 'https://x.org/coming-soon/', 'linked_status' => '', 'classes' => array( 'hide_link' ) ),
+	array( 'id' => 2, 'parent' => 0, 'title' => 'Prepaid Catalog Order', 'url' => 'https://x.org/coming-soon/', 'linked_status' => '', 'classes' => array() ),
+) );
+ok( 1 === count( array_unique( array_column( $hid, 'item_id' ) ) ) && 2 === (int) $hid[0]['item_id'], 'an item with a hide_ class is skipped, an identical visible one is still reported' );
+
 echo "\nproduct_issues\n";
 $p = function ( $o ) { return array_merge( array( 'id' => 1, 'title' => 'T', 'manage_stock' => true, 'stock_quantity' => 1, 'stock_status' => 'instock' ), $o ); };
 ok( array() === FDJ_MCP_Annual_Reset::product_issues( $p( array() ), 1, array() ), 'managed, qty 1, in stock: clean' );

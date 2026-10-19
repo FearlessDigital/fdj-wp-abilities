@@ -1298,6 +1298,12 @@ class FDJ_MCP_Annual_Reset {
 		}
 
 		foreach ( $items as $it ) {
+			// An item given a hide_* class is hidden on purpose (a leftover kept out of
+			// sight, not a mistake in the menu), so it is not reported.
+			if ( ! empty( $it['classes'] ) && preg_grep( '/^hide/i', (array) $it['classes'] ) ) {
+				continue;
+			}
+
 			$id    = (int) $it['id'];
 			$title = (string) $it['title'];
 			$url   = (string) $it['url'];
@@ -1316,7 +1322,7 @@ class FDJ_MCP_Annual_Reset {
 			}
 
 			if ( preg_match( '#-[0-9]/?$#', $path ) && '' !== $path ) {
-				$issues[] = array( 'item_id' => $id, 'title' => $title, 'issue' => 'URL ends in -2, -3 and so on: probably a duplicate page twin of another page' );
+				$issues[] = array( 'item_id' => $id, 'title' => $title, 'issue' => 'URL ends in -2, -3 and so on: may be a duplicate page twin of another page (check; some real slugs end this way)' );
 			}
 
 			if ( isset( $it['linked_status'] ) && '' !== $it['linked_status'] && 'publish' !== $it['linked_status'] && 'private' !== $it['linked_status'] ) {
@@ -2352,7 +2358,9 @@ class FDJ_MCP_Annual_Reset {
 				$p->set_manage_stock( $wants_manage );
 			}
 
-			if ( isset( $it['stock_quantity'] ) && (int) $it['stock_quantity'] !== (int) $p->get_stock_quantity() ) {
+			// A product that has never held a quantity reports null, which compares equal
+			// to 0 once cast, so a request for 0 (sold out) must not be mistaken for "no change".
+			if ( isset( $it['stock_quantity'] ) && ( null === $p->get_stock_quantity() || (int) $it['stock_quantity'] !== (int) $p->get_stock_quantity() ) ) {
 				$chg['stock_quantity'] = array( $p->get_stock_quantity(), (int) $it['stock_quantity'] );
 				$p->set_stock_quantity( (int) $it['stock_quantity'] );
 			}
