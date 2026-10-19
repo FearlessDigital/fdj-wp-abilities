@@ -51,7 +51,7 @@ function field( $id, $type, $label, $extra = array() ) {
 echo "definitions\n";
 $defs  = FDJ_MCP_Annual_Reset::get_definitions();
 $names = array_keys( $defs );
-ok( 10 === count( $defs ), 'ten abilities when Gravity Forms and WooCommerce are present (got ' . count( $defs ) . ')' );
+ok( 11 === count( $defs ), 'eleven abilities when Gravity Forms and WooCommerce are present (got ' . count( $defs ) . ')' );
 ok( count( $names ) === count( array_unique( $names ) ), 'names are unique' );
 $bad = array();
 foreach ( $defs as $n => $d ) {
@@ -69,6 +69,8 @@ ok( ! $bad, 'every definition is well formed and callable' . ( $bad ? ': ' . imp
 $writes = array_keys( array_filter( $defs, function ( $d ) { return $d['is_write']; } ) );
 sort( $writes );
 ok( $writes === array( 'fdj/set-product-fields', 'gravityforms/export-entries', 'gravityforms/restore-form', 'gravityforms/trash-entries', 'gravityforms/update-form' ), 'exactly the five expected abilities are marked as writes' );
+ok( ! $defs['fdj/list-order-items']['is_write'] && isset( $defs['fdj/list-order-items']['input_schema']['properties']['include_email'] ), 'list-order-items is read-only and email is opt-in' );
+ok( false === $defs['fdj/list-order-items']['input_schema']['properties']['include_email']['default'], 'email defaults to off' );
 ok( ! isset( FDJ_MCP_Annual_Reset::get_definitions()['gravityforms/trash-entries']['input_schema']['properties']['everything'] ), 'trash-entries has no "everything" switch' );
 ok( in_array( 'date_end', $defs['gravityforms/trash-entries']['input_schema']['required'], true ), 'trash-entries requires date_end' );
 

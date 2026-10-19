@@ -13,7 +13,8 @@
  *
  *  - Core (any site): fdj/get-menu, fdj/search-everywhere, fdj/annual-reset-report.
  *  - Gravity Forms:   export-entries, trash-entries, update-form, restore-form.
- *  - WooCommerce:     fdj/audit-products, fdj/set-product-fields, fdj/get-order-notes.
+ *  - WooCommerce:     fdj/audit-products, fdj/set-product-fields, fdj/get-order-notes,
+ *                     fdj/list-order-items.
  *
  * Design rules carried over from the rest of this plugin:
  *
@@ -26,7 +27,9 @@
  *    with export-entries, and refuses entries from the current calendar year
  *    unless told otherwise. The thing it protects against is clearing this
  *    year's real submissions while clearing last year's.
- *  - Nothing here returns customer names, emails or addresses from orders.
+ *  - Order abilities never return phone numbers or street addresses. Buyer
+ *    names come back only from fdj/list-order-items, which exists because a
+ *    show catalog credits sponsors by name; email is opt-in there.
  *
  * Writes ship disabled, like every other write in this plugin.
  *
@@ -701,6 +704,71 @@ class FDJ_MCP_Annual_Reset {
 				),
 				'execute_callback'    => array( __CLASS__, 'execute_set_product_fields' ),
 				'permission_callback' => array( __CLASS__, 'can_edit_products' ),
+			),
+
+			'fdj/list-order-items' => array(
+				'is_write'            => false,
+				'requires'            => 'woocommerce',
+				'label'               => 'List Order Items',
+				'description'         => 'One row per purchased item across many orders, with what a show catalog or a fulfilment list needs: order date and status, the buyer\'s first and last name, the product, quantity, line total, and every custom detail the buyer filled in on the product page (for example "Attribution: In memory of" and "Attribution Name", or a dog\'s name). The native WooCommerce orders ability returns only a billing email and no per-item details, so it cannot answer "who sponsored which trophy and in whose memory". Filter by date, status, product category or product. Buyer names are included because a catalog credits sponsors by name; email addresses are left out unless include_email is true, and phone numbers and street addresses are never returned. Also returns a per-product tally. Read-only; every call is written to the audit log.',
+				'category'            => 'site',
+				'annotations'         => array(
+					'readonly'    => true,
+					'destructive' => false,
+					'idempotent'  => true,
+				),
+				'input_schema'        => array(
+					'type'       => 'object',
+					'properties' => array(
+						'date_after'     => array(
+							'type'        => 'string',
+							'description' => 'Only orders created on or after this date, e.g. "2026-06-01".',
+						),
+						'date_before'    => array(
+							'type'        => 'string',
+							'description' => 'Only orders created on or before this date.',
+						),
+						'statuses'       => array(
+							'type'        => 'array',
+							'items'       => array(
+								'type' => 'string',
+								'enum' => array( 'pending', 'processing', 'on-hold', 'completed', 'cancelled', 'refunded', 'failed' ),
+							),
+							'description' => 'Order statuses to include. Defaults to processing, on-hold and completed, which are the paid ones.',
+						),
+						'category_slugs' => array(
+							'type'        => 'array',
+							'items'       => array( 'type' => 'string' ),
+							'description' => 'Only items whose product is in one of these product category slugs, e.g. ["trophy-donation"].',
+						),
+						'product_ids'    => array(
+							'type'        => 'array',
+							'items'       => array( 'type' => 'integer' ),
+							'description' => 'Only items for these product IDs.',
+						),
+						'include_email'  => array(
+							'type'        => 'boolean',
+							'description' => 'Also return the billing email. Off by default.',
+							'default'     => false,
+						),
+						'limit'          => array(
+							'type'        => 'integer',
+							'description' => 'Max orders to read. Defaults to 200, capped at 500.',
+							'default'     => 200,
+						),
+					),
+				),
+				'output_schema'       => array(
+					'type'       => 'object',
+					'properties' => array(
+						'order_count' => array( 'type' => 'integer' ),
+						'row_count'   => array( 'type' => 'integer' ),
+						'rows'        => array( 'type' => 'array' ),
+						'by_product'  => array( 'type' => 'array' ),
+					),
+				),
+				'execute_callback'    => array( __CLASS__, 'execute_list_order_items' ),
+				'permission_callback' => array( __CLASS__, 'can_view_orders' ),
 			),
 
 			'fdj/get-order-notes' => array(
@@ -2397,6 +2465,139 @@ class FDJ_MCP_Annual_Reset {
 			'dry_run'  => $dry_run,
 			'results'  => $results,
 			'verified' => $verified,
+		);
+	}
+
+	/* -----------------------------------------------------------------
+	 * fdj/list-order-items
+	 * ----------------------------------------------------------------- */
+
+	/**
+	 * One row per purchased item, with buyer name and custom details.
+	 *
+	 * @param array $input Ability input.
+	 * @return array|WP_Error
+	 */
+	public static function execute_list_order_items( $input = array() ) {
+		$allowed  = array( 'pending', 'processing', 'on-hold', 'completed', 'cancelled', 'refunded', 'failed' );
+		$statuses = isset( $input['statuses'] ) && is_array( $input['statuses'] ) ? $input['statuses'] : array( 'processing', 'on-hold', 'completed' );
+		$statuses = array_values( array_intersect( array_map( function ( $s ) {
+			return preg_replace( '/^wc-/', '', (string) $s );
+		}, $statuses ), $allowed ) );
+
+		if ( ! $statuses ) {
+			return new WP_Error( 'fdj_orders_bad_status', 'No valid statuses given.' );
+		}
+
+		$limit = isset( $input['limit'] ) ? max( 1, min( 500, (int) $input['limit'] ) ) : 200;
+		$args  = array(
+			'limit'   => $limit,
+			'status'  => $statuses,
+			'orderby' => 'date',
+			'order'   => 'ASC',
+			'return'  => 'ids',
+		);
+
+		$after  = isset( $input['date_after'] ) ? trim( (string) $input['date_after'] ) : '';
+		$before = isset( $input['date_before'] ) ? trim( (string) $input['date_before'] ) : '';
+
+		// A bare date means the whole day.
+		if ( '' !== $before && preg_match( '/^\d{4}-\d{2}-\d{2}$/', $before ) ) {
+			$before .= ' 23:59:59';
+		}
+
+		if ( '' !== $after && '' !== $before ) {
+			$args['date_created'] = $after . '...' . $before;
+		} elseif ( '' !== $after ) {
+			$args['date_created'] = '>=' . $after;
+		} elseif ( '' !== $before ) {
+			$args['date_created'] = '<=' . $before;
+		}
+
+		$cats       = isset( $input['category_slugs'] ) && is_array( $input['category_slugs'] ) ? array_map( 'sanitize_title', $input['category_slugs'] ) : array();
+		$only_ids   = isset( $input['product_ids'] ) && is_array( $input['product_ids'] ) ? array_map( 'intval', $input['product_ids'] ) : array();
+		$with_email = ! empty( $input['include_email'] );
+		$ids        = wc_get_orders( $args );
+		$rows       = array();
+		$tally      = array();
+
+		foreach ( (array) $ids as $id ) {
+			$o = wc_get_order( (int) $id );
+			if ( ! $o ) {
+				continue;
+			}
+
+			foreach ( $o->get_items() as $item ) {
+				$pid = (int) $item->get_product_id();
+
+				if ( $only_ids && ! in_array( $pid, $only_ids, true ) ) {
+					continue;
+				}
+
+				if ( $cats ) {
+					$hit = false;
+					foreach ( $cats as $c ) {
+						if ( has_term( $c, 'product_cat', $pid ) ) {
+							$hit = true;
+							break;
+						}
+					}
+					if ( ! $hit ) {
+						continue;
+					}
+				}
+
+				// The details a buyer filled in on the product page. Keys that start
+				// with an underscore are WooCommerce's own bookkeeping (stock
+				// reductions and so on), not buyer input.
+				$details = array();
+				foreach ( $item->get_formatted_meta_data( '_', true ) as $m ) {
+					$key = trim( wp_strip_all_tags( (string) $m->display_key ) );
+					$val = trim( wp_strip_all_tags( (string) $m->display_value ) );
+					if ( '' !== $key && '' !== $val ) {
+						$details[ $key ] = $val;
+					}
+				}
+
+				$row = array(
+					'order_id'   => (int) $id,
+					'date'       => $o->get_date_created() ? $o->get_date_created()->date( 'Y-m-d H:i' ) : '',
+					'status'     => $o->get_status(),
+					'first_name' => (string) $o->get_billing_first_name(),
+					'last_name'  => (string) $o->get_billing_last_name(),
+					'product_id' => $pid,
+					'product'    => $item->get_name(),
+					'quantity'   => (int) $item->get_quantity(),
+					'line_total' => (string) $item->get_total(),
+					'details'    => $details ? $details : new stdClass(),
+				);
+
+				if ( $with_email ) {
+					$row['email'] = (string) $o->get_billing_email();
+				}
+
+				$rows[] = $row;
+
+				$key = $item->get_name();
+				if ( ! isset( $tally[ $key ] ) ) {
+					$tally[ $key ] = array( 'product' => $key, 'product_id' => $pid, 'items' => 0, 'quantity' => 0, 'total' => 0.0 );
+				}
+				++$tally[ $key ]['items'];
+				$tally[ $key ]['quantity'] += (int) $item->get_quantity();
+				$tally[ $key ]['total']    += (float) $item->get_total();
+			}
+		}
+
+		foreach ( $tally as $k => $t ) {
+			$tally[ $k ]['total'] = round( $t['total'], 2 );
+		}
+
+		return array(
+			'order_count' => count( (array) $ids ),
+			'row_count'   => count( $rows ),
+			'truncated'   => count( (array) $ids ) >= $limit,
+			'rows'        => $rows,
+			'by_product'  => array_values( $tally ),
 		);
 	}
 

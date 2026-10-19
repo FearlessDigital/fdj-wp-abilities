@@ -101,9 +101,10 @@ For the job a client site repeats every year: set seasonal products back to a kn
 | `gravityforms/restore-form` | Put a form back to a backup taken by `update-form`. Lists backups when called without an ID | Write | Off |
 | `fdj/audit-products` | Stock, status, price, sold-individually, sales, categories and attached form for many products at once, with a text-mention column and duplicate titles | Read | Off |
 | `fdj/set-product-fields` | Stock, status, title, price, backorders, sold-individually and short description on up to 100 products, `dry_run`, read back. Cannot trash or delete | Write | Off |
+| `fdj/list-order-items` | One row per purchased item across many orders: date, status, buyer first and last name, product, quantity, total and every detail the buyer filled in on the product page (attribution, dog names). Filter by date, status, category or product. Email opt-in; never phone or address; per-product tally included | Read | Off |
 | `fdj/get-order-notes` | Notes on WooCommerce orders (why a charge failed), found by ID or by status and date. Never returns customer details | Read | Off |
 
-Safety rules that hold across the group: nothing deletes permanently; every write has `dry_run` and reports what is actually stored afterwards; `trash-entries` cannot run without a matching export and will not touch this year's entries by accident; order data is returned without names, emails or addresses.
+Safety rules that hold across the group: nothing deletes permanently; every write has `dry_run` and reports what is actually stored afterwards; `trash-entries` cannot run without a matching export and will not touch this year's entries by accident; order data never includes phone numbers or street addresses, and buyer names appear only in `fdj/list-order-items` (email is opt-in there).
 
 `tests/annual-reset-smoke.php` covers the pure decisions (what `trash-entries` will refuse, how `update-form` keeps conditional logic in step with a renamed choice, what counts as a menu or product problem). Run it with `php tests/annual-reset-smoke.php`. It does not exercise Gravity Forms or WooCommerce; test those on a staging copy before releasing.
 
@@ -281,7 +282,7 @@ Deliberately not built:
 
 ## Version history
 
-- `Unreleased` - annual-reset abilities: `fdj/get-menu`, `fdj/search-everywhere`, `fdj/annual-reset-report`, `gravityforms/export-entries`, `gravityforms/trash-entries`, `gravityforms/update-form`, `gravityforms/restore-form`, `fdj/audit-products`, `fdj/set-product-fields`, `fdj/get-order-notes`; new `woocommerce` integration group. On `feature/annual-reset-abilities`, not yet released.
+- `Unreleased` - annual-reset abilities: `fdj/get-menu`, `fdj/search-everywhere`, `fdj/annual-reset-report`, `gravityforms/export-entries`, `gravityforms/trash-entries`, `gravityforms/update-form`, `gravityforms/restore-form`, `fdj/audit-products`, `fdj/set-product-fields`, `fdj/get-order-notes`, `fdj/list-order-items`; new `woocommerce` integration group. On `feature/annual-reset-abilities`, not yet released.
 - `1.9.0` - GeoDirectory abilities: `fdj/get-listing`, `fdj/update-listing`, `fdj/list-listing-fields`, `fdj/add-listing-field-option`, `fdj/geocode-address`. Listing fields live in GeoDirectory's own table, invisible to every other ability. `update-listing` verifies its own writes because GeoDirectory can undo them without an error.
 - `1.9.1` - Bridge now sends the `MCP-Protocol-Version` header on every request after initialize. Newer MCP Adapter releases reject requests without it ("MCP-Protocol-Version header is required"), so connectors failed to list tools. Installed `.mcpb` connectors must be re-downloaded.
 - `1.8.0` - user abilities: `fdj/create-user`, `fdj/list-users`, `fdj/send-password-reset`, `fdj/set-post-author`, and an optional `author` on `fdj/create-post`. A build could make the listing but not the person who owns it, so every directory import stopped at wp-admin. No password is ever taken or returned; WordPress's own new-user email carries the set-password link.

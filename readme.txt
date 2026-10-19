@@ -50,11 +50,11 @@ Check the Basic auth row in the health panel. Some hosts pass the Authorization 
 == Changelog ==
 
 = Unreleased =
-* New, for the yearly reset a client site repeats: fdj/get-menu, fdj/search-everywhere, fdj/annual-reset-report, fdj/audit-products, fdj/set-product-fields, fdj/get-order-notes, gravityforms/export-entries, gravityforms/trash-entries, gravityforms/update-form and gravityforms/restore-form. The Gravity Forms and WooCommerce groups appear only on a site running that plugin; WooCommerce is a new group in the settings screen.
+* New, for the yearly reset a client site repeats: fdj/get-menu, fdj/search-everywhere, fdj/annual-reset-report, fdj/audit-products, fdj/set-product-fields, fdj/get-order-notes, fdj/list-order-items, gravityforms/export-entries, gravityforms/trash-entries, gravityforms/update-form and gravityforms/restore-form. The Gravity Forms and WooCommerce groups appear only on a site running that plugin; WooCommerce is a new group in the settings screen.
 * trash-entries moves old entries to the Gravity Forms trash and cannot run unless the same entries were exported with export-entries in the last day, the count matches, and none are from the current calendar year (unless allow_current_year is set). Nothing is deleted permanently.
 * update-form saves a backup first and can be undone with restore-form. When a choice's text changes, its stored value follows and every conditional-logic rule that matched the old value is rewritten, so a field shown "when the checkbox is X" does not silently disappear. A field still referenced by logic, a calculation, a notification or a confirmation cannot be deleted without force_delete.
-* Order abilities never return customer names, emails or addresses.
-* Existing installs: all ten are off until enabled under Tools > Claude MCP.
+* fdj/list-order-items gives one row per purchased item with the buyer's name and every detail they filled in (for example a trophy attribution), which no other ability can see. Email is opt-in; phone numbers and street addresses are never returned.
+* Existing installs: all eleven are off until enabled under Tools > Claude MCP.
 
 = 1.9.0 =
 * New: fdj/get-listing, fdj/update-listing, fdj/list-listing-fields, fdj/add-listing-field-option and fdj/geocode-address, active only on sites running GeoDirectory. A listing keeps almost nothing in post meta - the address, coordinates, package and every custom field live in GeoDirectory's own table - so until now a listing read through this plugin looked like a title and a description with the visible address nowhere, and nothing could write one at all.
